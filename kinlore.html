@@ -1219,7 +1219,11 @@ document.getElementById('prevPhotoBtn').addEventListener('click', () => {
 });
 document.getElementById('nextPhotoBtn').addEventListener('click', () => {
   const idx = filteredPhotos.findIndex(p => p.name === currentPhoto?.name);
-  if (idx !== -1 && idx < filteredPhotos.length - 1) { saveCurrentPhoto(); selectPhoto(filteredPhotos[idx + 1]); }
+  if (idx !== -1 && idx < filteredPhotos.length - 1) {
+    const next = filteredPhotos[idx + 1];
+    saveCurrentPhoto();
+    selectPhoto(next);
+  }
 });
 document.getElementById('renameBtn').addEventListener('click', () => {
   const input = document.getElementById('renameInput');
@@ -1260,8 +1264,9 @@ document.addEventListener('keydown', e => {
   const idx = filteredPhotos.findIndex(p => p.name === currentPhoto.name);
   if (idx === -1) return;
   if (e.key === 'ArrowRight' && idx < filteredPhotos.length - 1) {
+    const next = filteredPhotos[idx + 1];
     saveCurrentPhoto();
-    selectPhoto(filteredPhotos[idx + 1]);
+    selectPhoto(next);
   } else if (e.key === 'ArrowLeft' && idx > 0) {
     saveCurrentPhoto();
     selectPhoto(filteredPhotos[idx - 1]);
@@ -1758,12 +1763,11 @@ function closePreview() {
 }
 
 function saveAndNext() {
-  saveCurrentPhoto();
-  // Find the next photo in the filtered list
+  // Capture next photo before saving — applyFilters() may remove current photo from filteredPhotos
   const idx = filteredPhotos.findIndex(p => p.name === currentPhoto?.name);
-  if (idx !== -1 && idx < filteredPhotos.length - 1) {
-    selectPhoto(filteredPhotos[idx + 1]);
-  }
+  const next = (idx !== -1 && idx < filteredPhotos.length - 1) ? filteredPhotos[idx + 1] : null;
+  saveCurrentPhoto();
+  if (next) selectPhoto(next);
 }
 
 function discardChanges() {
