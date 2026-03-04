@@ -452,7 +452,7 @@
     border-color: var(--sepia);
     box-shadow: 0 0 0 3px rgba(200,146,78,0.15);
   }
-  #filterPerson {
+  #filterPerson, #filterTagged {
     font-family: var(--ui-font);
     font-size: 0.85rem;
     padding: 8px 13px;
@@ -985,6 +985,11 @@
         <div id="gridToolbar">
           <input id="searchInput" type="text" placeholder="Search filename…" />
           <select id="filterPerson"><option value="">All people</option></select>
+          <select id="filterTagged">
+            <option value="">All photos</option>
+            <option value="tagged">Tagged only</option>
+            <option value="untagged">Untagged only</option>
+          </select>
           <span class="grid-stat" id="gridStat"></span>
         </div>
         <div id="photoGrid">
@@ -1134,6 +1139,7 @@ document.getElementById('lightboxClose').addEventListener('click', () => documen
 document.getElementById('lightbox').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('open'); });
 document.getElementById('searchInput').addEventListener('input', applyFilters);
 document.getElementById('filterPerson').addEventListener('change', applyFilters);
+document.getElementById('filterTagged').addEventListener('change', applyFilters);
 
 // Dirty tracking — mark unsaved changes
 function markDirty() { isDirty = true; }
@@ -1220,7 +1226,7 @@ async function openFolder() {
     const mf = await _pendingDirHandle.getFileHandle('metadata.json');
     const txt = await (await mf.getFile()).text();
     const md = JSON.parse(txt);
-    metaCount = Object.keys(md).length;
+    metaCount = Object.values(md).filter(m => (m.people?.length > 0) || m.date || m.caption).length;
     hasMetadata = true;
   } catch {}
 
@@ -1436,11 +1442,20 @@ function renderGrid(list) {
 function applyFilters() {
   const search = document.getElementById('searchInput').value.toLowerCase().trim();
   const person = document.getElementById('filterPerson').value;
+  const tagged = document.getElementById('filterTagged').value;
 
   let list = photos;
   if (search) list = list.filter(p => p.name.toLowerCase().includes(search));
   if (person) list = list.filter(p => (metadata[p.name]?.people || []).includes(person));
+  if (tagged === 'tagged')   list = list.filter(p => isTagged(p.name));
+  if (tagged === 'untagged') list = list.filter(p => !isTagged(p.name));
   renderGrid(list);
+}
+
+function isTagged(name) {
+  const m = metadata[name];
+  if (!m) return false;
+  return (m.people && m.people.length > 0) || m.date || (m.caption && m.caption.trim());
 }
 
 // ─────────────────────────────────────────────────────────────────
