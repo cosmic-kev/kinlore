@@ -1,0 +1,2097 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Family Photo Tagger</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Lora:ital,wght@0,400;0,500;1,400&display=swap');
+
+  :root {
+    --ink:       #2c1f0e;
+    --ink-light: #5c4033;
+    --paper:     #f5efe6;
+    --paper-dark:#ede4d6;
+    --sepia:     #c9a86c;
+    --sepia-dark:#a07840;
+    --accent:    #7b3f2a;
+    --faded:     #9e8a78;
+    --shadow:    rgba(44,31,14,0.18);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--paper-dark);
+    color: var(--ink);
+    font-family: 'Lora', Georgia, serif;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background-image:
+      url("data:image/svg+xml,%3Csvg width='200' height='200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--ink);
+    color: var(--paper);
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    box-shadow: 0 3px 12px var(--shadow);
+    position: sticky; top: 0; z-index: 100;
+    flex-shrink: 0;
+  }
+  header h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  header h1 span { color: var(--sepia); }
+
+  .header-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+  /* ── Buttons ── */
+  .btn {
+    font-family: 'Lora', serif;
+    font-size: 0.85rem;
+    padding: 8px 18px;
+    border-radius: 3px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+    font-weight: 500;
+  }
+  .btn-primary {
+    background: var(--sepia);
+    color: var(--ink);
+  }
+  .btn-primary:hover { background: var(--sepia-dark); color: #fff; }
+  .btn-accent {
+    background: var(--accent);
+    color: var(--paper);
+  }
+  .btn-accent:hover { background: #5e2d1c; }
+  .btn-ghost {
+    background: transparent;
+    color: var(--paper);
+    border: 1px solid rgba(255,255,255,0.25);
+  }
+  .btn-ghost:hover { background: rgba(255,255,255,0.1); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── Status bar ── */
+  #statusBar {
+    background: var(--ink-light);
+    color: var(--paper);
+    font-size: 0.78rem;
+    padding: 5px 32px;
+    font-family: 'Lora', serif;
+    font-style: italic;
+    min-height: 28px;
+    display: flex; align-items: center; gap: 12px;
+    flex-shrink: 0;
+    position: relative;
+  }
+  #loadProgressBar {
+    position: absolute;
+    bottom: 0; left: 0;
+    height: 3px;
+    background: var(--sepia);
+    width: 0%;
+    transition: width 0.25s ease;
+    display: none;
+  }
+  #statusBar .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--sepia); flex-shrink: 0;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* ── Landing ── */
+  #landing {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 24px;
+    text-align: center;
+    gap: 24px;
+    flex: 1;
+    overflow-y: auto;
+  }
+  #landing .ornament {
+    font-size: 3rem;
+    line-height: 1;
+    color: var(--sepia);
+    font-family: 'Playfair Display', serif;
+  }
+  #landing h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 2rem;
+    color: var(--ink);
+  }
+  #landing p {
+    max-width: 480px;
+    color: var(--ink-light);
+    line-height: 1.7;
+    font-size: 0.95rem;
+  }
+  .steps {
+    display: flex;
+    gap: 32px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .step {
+    background: var(--paper);
+    border: 1px solid var(--sepia);
+    border-radius: 4px;
+    padding: 18px 22px;
+    max-width: 200px;
+    text-align: left;
+    box-shadow: 3px 3px 0 var(--sepia);
+  }
+  .step .num {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.6rem;
+    color: var(--sepia);
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+  .step p { font-size: 0.82rem; color: var(--ink-light); margin: 0; }
+
+  /* ── Main layout ── */
+  #app { display: none; flex: 1; flex-direction: column; min-height: 0; }
+  #app.visible { display: flex; }
+  #appLayout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 0;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* ── Grid panel ── */
+  #gridPanel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    height: 100%;
+    min-height: 0;
+  }
+
+  /* Full image preview pane (shown when a photo is selected) */
+  #fullPreviewPane {
+    display: none;
+    flex: 1;
+    min-height: 0;
+    background: #1a1008;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+    border-bottom: 1px solid rgba(201,168,108,0.2);
+  }
+  #fullPreviewPane.visible { display: flex; }
+  #fullPreviewImg {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    filter: sepia(8%) contrast(1.04);
+    display: block;
+    transition: opacity 0.15s;
+  }
+  #fullPreviewImg.loading { opacity: 0; }
+  #previewSpinner {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 32px; height: 32px;
+    border: 3px solid rgba(201,168,108,0.2);
+    border-top-color: var(--sepia);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: none;
+    pointer-events: none;
+  }
+  #fullPreviewPane.loading-img #previewSpinner { display: block; }
+  @keyframes spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+  #fullPreviewFilename {
+    position: absolute;
+    bottom: 8px; left: 0; right: 0;
+    text-align: center;
+    font-size: 0.72rem;
+    color: rgba(245,239,230,0.45);
+    font-style: italic;
+    pointer-events: none;
+  }
+  #closePreviewBtn {
+    position: absolute;
+    top: 10px; right: 12px;
+    background: rgba(30,19,9,0.6);
+    border: 1px solid rgba(201,168,108,0.4);
+    color: var(--paper);
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    line-height: 1;
+    z-index: 10;
+    transition: background 0.15s;
+  }
+  #closePreviewBtn:hover { background: var(--accent); border-color: var(--accent); }
+  #previewNavBtns {
+    position: absolute;
+    bottom: 10px; right: 12px;
+    display: flex;
+    gap: 6px;
+  }
+  #previewNavBtns button {
+    background: rgba(30,19,9,0.6);
+    border: 1px solid rgba(201,168,108,0.4);
+    color: var(--paper);
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    font-size: 1.4rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    line-height: 1;
+    z-index: 10;
+    transition: background 0.15s, opacity 0.15s;
+  }
+  #previewNavBtns button:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); }
+  #previewNavBtns button:disabled { opacity: 0.25; cursor: default; }
+  #editorFilenameBlock {
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--paper-dark);
+    margin-bottom: 4px;
+  }
+  #editorFilenameRow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  #editorFilename {
+    font-size: 0.88rem;
+    color: var(--ink);
+    font-family: 'Courier New', monospace;
+    word-break: break-all;
+    flex: 1;
+  }
+  #renameBtn {
+    background: rgba(30,19,9,0.05);
+    border: 1px solid rgba(201,168,108,0.35);
+    color: var(--ink-light);
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    font-size: 0.9rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  #renameBtn:hover { background: var(--paper-dark); border-color: var(--sepia); }
+  #deleteFileBtn {
+    background: transparent;
+    border: 1px solid #c07070;
+    color: #a05050;
+    font-size: 0.72rem;
+    padding: 3px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    flex-shrink: 0;
+    font-family: 'Lora', serif;
+    transition: background 0.15s, color 0.15s;
+  }
+  #deleteFileBtn:hover { background: #f5e8e8; border-color: #a05050; color: #7a2020; }
+  #renameRow {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  #renameInput {
+    flex: 1;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    padding: 4px 8px;
+    border: 1px solid var(--sepia);
+    border-radius: 3px;
+    background: var(--paper);
+    color: var(--ink);
+    outline: none;
+    min-width: 0;
+  }
+  #renameInput:focus { border-color: var(--sepia-dark); }
+  #renameConfirmBtn {
+    background: var(--sepia);
+    border: none;
+    color: var(--ink);
+    font-family: 'Lora', serif;
+    font-size: 0.78rem;
+    padding: 4px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    flex-shrink: 0;
+    font-weight: 500;
+    transition: background 0.15s;
+  }
+  #renameConfirmBtn:hover { background: var(--sepia-dark); color: #fff; }
+  #renameCancelBtn {
+    background: transparent;
+    border: 1px solid rgba(201,168,108,0.5);
+    color: var(--ink-light);
+    font-family: 'Lora', serif;
+    font-size: 0.78rem;
+    padding: 4px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  #renameCancelBtn:hover { background: var(--paper-dark); }
+
+  /* Grid section — scrollable strip when preview is visible */
+  #gridSection {
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  #gridSection.strip {
+    height: 130px;
+    min-height: 130px;
+    max-height: 130px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-top: 1px solid rgba(201,168,108,0.25);
+    padding: 8px 10px;
+    background: #1a1008;
+    flex-shrink: 0;
+  }
+  #gridSection.full {
+    flex: 1;
+    max-height: none;
+    padding: 20px;
+  }
+
+  /* In strip mode: hide toolbar, make grid a horizontal row */
+  #gridSection.strip #gridToolbar { display: none; }
+  #gridSection.strip #photoGrid {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 7px;
+    height: 100%;
+    align-items: center;
+  }
+  #gridSection.strip #emptyGrid { color: rgba(245,239,230,0.4); }
+
+  /* Strip cards: fixed square, no meta text */
+  #gridSection.strip .photo-card {
+    flex: 0 0 100px;
+    width: 100px;
+    height: 100px;
+    border-radius: 2px;
+    box-shadow: none;
+  }
+  #gridSection.strip .photo-card:hover { transform: scale(1.05); box-shadow: 0 2px 8px rgba(0,0,0,0.5); }
+  #gridSection.strip .photo-card img {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+  }
+  #gridSection.strip .photo-card-meta { display: none; }
+  #gridSection.strip .tagged-indicator { width: 7px; height: 7px; top: 4px; right: 4px; }
+
+  /* Horizontal scrollbar style for the strip */
+  #gridSection.strip::-webkit-scrollbar { height: 5px; }
+  #gridSection.strip::-webkit-scrollbar-track { background: #1a1008; }
+  #gridSection.strip::-webkit-scrollbar-thumb { background: var(--sepia-dark); border-radius: 3px; }
+  #gridToolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  #searchInput {
+    font-family: 'Lora', serif;
+    font-size: 0.85rem;
+    padding: 7px 13px;
+    border: 1px solid var(--sepia);
+    border-radius: 3px;
+    background: var(--paper);
+    color: var(--ink);
+    flex: 1;
+    min-width: 140px;
+  }
+  #filterPerson {
+    font-family: 'Lora', serif;
+    font-size: 0.85rem;
+    padding: 7px 13px;
+    border: 1px solid var(--sepia);
+    border-radius: 3px;
+    background: var(--paper);
+    color: var(--ink);
+    min-width: 150px;
+  }
+  .grid-stat { font-size: 0.8rem; color: var(--faded); font-style: italic; margin-left: auto; }
+
+  #photoGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+  }
+
+  .photo-card {
+    background: var(--paper);
+    border: 1px solid rgba(201,168,108,0.4);
+    border-radius: 3px;
+    cursor: pointer;
+    overflow: hidden;
+    transition: transform 0.15s, box-shadow 0.15s;
+    box-shadow: 2px 2px 6px var(--shadow);
+    position: relative;
+  }
+  .photo-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 4px 6px 16px var(--shadow);
+  }
+  .photo-card.selected {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+  }
+  .photo-card img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    display: block;
+    filter: sepia(15%) contrast(1.04);
+    transition: filter 0.2s;
+  }
+  .photo-card:hover img { filter: sepia(5%) contrast(1.06); }
+
+  .photo-card-meta {
+    padding: 7px 9px 8px;
+  }
+  .photo-card-name {
+    font-size: 0.72rem;
+    color: var(--ink-light);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-style: italic;
+  }
+  .photo-card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    margin-top: 4px;
+  }
+  .tag-pill {
+    background: var(--sepia);
+    color: var(--ink);
+    font-size: 0.65rem;
+    padding: 1px 7px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+  .photo-card-date {
+    font-size: 0.68rem;
+    color: var(--faded);
+    margin-top: 3px;
+  }
+  .tagged-indicator {
+    position: absolute;
+    top: 6px; right: 6px;
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: #6aaa6a;
+    box-shadow: 0 0 0 2px var(--paper);
+  }
+
+  /* ── Editor panel ── */
+  #editorPanel {
+    background: var(--paper);
+    border-left: 1px solid var(--sepia);
+    padding: 24px 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    height: 100%;
+    min-height: 0;
+  }
+
+  #editorPlaceholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--faded);
+    text-align: center;
+    gap: 10px;
+    font-style: italic;
+    font-size: 0.9rem;
+    padding: 40px 20px;
+  }
+  #editorPlaceholder .arrow { font-size: 2rem; color: var(--sepia); }
+
+  #editorContent { display: none; flex-direction: column; gap: 18px; }
+
+  .field-label {
+    font-family: 'Playfair Display', serif;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--ink);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    display: block;
+  }
+
+  /* Tag input */
+  .tag-input-wrap {
+    border: 1px solid var(--sepia);
+    border-radius: 3px;
+    background: var(--paper);
+    padding: 6px 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    align-items: center;
+    min-height: 40px;
+    cursor: text;
+    position: relative;
+  }
+  .tag-input-wrap:focus-within { outline: 2px solid var(--sepia-dark); }
+  .tag-chip {
+    background: var(--sepia);
+    color: var(--ink);
+    font-size: 0.78rem;
+    padding: 2px 8px 2px 10px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 500;
+  }
+  .tag-chip button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--ink);
+    font-size: 0.9rem;
+    line-height: 1;
+    padding: 0;
+    opacity: 0.6;
+  }
+  .tag-chip button:hover { opacity: 1; }
+  #tagText {
+    border: none;
+    outline: none;
+    background: transparent;
+    font-family: 'Lora', serif;
+    font-size: 0.85rem;
+    color: var(--ink);
+    flex: 1;
+    min-width: 80px;
+  }
+  #tagSuggestions {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0; right: 0;
+    background: var(--paper);
+    border: 1px solid var(--sepia);
+    border-radius: 3px;
+    z-index: 50;
+    box-shadow: 2px 4px 12px var(--shadow);
+    max-height: 180px;
+    overflow-y: auto;
+  }
+  .suggestion-item {
+    padding: 8px 13px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--ink);
+    transition: background 0.1s;
+  }
+  .suggestion-item:hover, .suggestion-item.active {
+    background: var(--sepia);
+    color: var(--ink);
+  }
+
+  /* Partial date input */
+  .date-fields {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .date-fields input, .date-fields select {
+    font-family: 'Lora', serif;
+    font-size: 0.85rem;
+    padding: 7px 8px;
+    border: 1px solid var(--sepia);
+    border-radius: 3px;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  .date-fields input:focus, .date-fields select:focus { outline: 2px solid var(--sepia-dark); }
+  #dateYear  { width: 72px; }
+  #dateMonth { flex: 1; min-width: 0; }
+  #dateDay   { width: 56px; }
+
+  /* Caption */
+  #captionInput {
+    font-family: 'Lora', serif;
+    font-size: 0.85rem;
+    padding: 8px 12px;
+    border: 1px solid var(--sepia);
+    border-radius: 3px;
+    background: var(--paper);
+    color: var(--ink);
+    width: 100%;
+    resize: vertical;
+    min-height: 70px;
+  }
+  #captionInput:focus { outline: 2px solid var(--sepia-dark); }
+
+  .save-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .save-row .btn { flex: 1; min-width: 0; font-size: 0.8rem; padding: 8px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .btn-discard {
+    background: transparent;
+    color: #a05050;
+    border: 1px solid #c07070;
+  }
+  .btn-discard:hover { background: #f5e8e8; border-color: #a05050; }
+  #saveStatus {
+    font-size: 0.75rem;
+    color: #6aaa6a;
+    font-style: italic;
+    opacity: 0;
+    transition: opacity 0.3s;
+    white-space: nowrap;
+    width: 100%;
+    text-align: center;
+    margin-top: 2px;
+  }
+  #saveStatus.show { opacity: 1; }
+
+  .divider {
+    border: none;
+    border-top: 1px solid var(--sepia);
+    opacity: 0.4;
+  }
+
+  /* ── Lightbox ── */
+  #lightbox {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(20,12,5,0.93);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+  }
+  #lightbox.open { display: flex; }
+  #lightboxImg {
+    max-width: 90vw;
+    max-height: 88vh;
+    object-fit: contain;
+    border-radius: 2px;
+    box-shadow: 0 0 60px rgba(0,0,0,0.7);
+    filter: sepia(8%) contrast(1.04);
+  }
+  #lightboxClose {
+    position: absolute;
+    top: 18px; right: 22px;
+    background: none; border: none;
+    color: var(--paper); font-size: 2rem;
+    cursor: pointer; opacity: 0.7;
+    font-family: serif;
+  }
+  #lightboxClose:hover { opacity: 1; }
+  #lightboxCaption {
+    position: absolute;
+    bottom: 24px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(20,12,5,0.75);
+    color: var(--paper);
+    padding: 8px 20px;
+    border-radius: 3px;
+    font-size: 0.88rem;
+    font-style: italic;
+    text-align: center;
+    max-width: 70vw;
+    pointer-events: none;
+  }
+
+  /* ── Empty state ── */
+  #emptyGrid {
+    grid-column: 1/-1;
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--faded);
+    font-style: italic;
+    font-size: 0.9rem;
+  }
+
+  /* ── Export bar ── */
+  #exportBar {
+    background: var(--ink);
+    color: var(--paper);
+    padding: 10px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    font-size: 0.82rem;
+    font-style: italic;
+    flex-shrink: 0;
+  }
+  #exportBar span { color: var(--sepia); }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 7px; }
+  ::-webkit-scrollbar-track { background: var(--paper-dark); }
+  ::-webkit-scrollbar-thumb { background: var(--sepia); border-radius: 4px; }
+
+
+  /* ── Open Folder Modal ── */
+  #folderModal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(20,12,5,0.85);
+    z-index: 300;
+    align-items: center;
+    justify-content: center;
+  }
+  #folderModal.open { display: flex; }
+  .modal-box {
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: 4px;
+    padding: 32px 36px;
+    max-width: 460px;
+    width: 90%;
+    box-shadow: 6px 8px 40px rgba(0,0,0,0.5);
+    border-top: 4px solid var(--sepia);
+    position: relative;
+  }
+  .modal-box h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.25rem;
+    margin-bottom: 6px;
+    color: var(--ink);
+  }
+  .modal-folder-name {
+    font-size: 0.8rem;
+    color: var(--faded);
+    font-style: italic;
+    margin-bottom: 16px;
+    word-break: break-all;
+  }
+  .modal-stat {
+    background: var(--paper-dark);
+    border: 1px solid rgba(201,168,108,0.4);
+    border-radius: 3px;
+    padding: 10px 14px;
+    margin-bottom: 18px;
+    font-size: 0.84rem;
+    line-height: 1.6;
+    color: var(--ink-light);
+  }
+  .modal-stat strong { color: var(--ink); }
+  .modal-check-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 8px;
+    cursor: pointer;
+  }
+  .modal-check-row input[type=checkbox] {
+    margin-top: 3px;
+    accent-color: var(--accent);
+    width: 15px; height: 15px;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .modal-check-label { font-size: 0.86rem; line-height: 1.5; color: var(--ink); }
+  .modal-check-label small { display: block; color: var(--faded); font-size: 0.76rem; font-style: italic; }
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 22px;
+    justify-content: flex-end;
+  }
+  #thumbProgress {
+    display: none;
+    margin-top: 14px;
+    font-size: 0.8rem;
+    color: var(--ink-light);
+    font-style: italic;
+  }
+  .progress-bar-wrap {
+    background: var(--paper-dark);
+    border-radius: 20px;
+    height: 6px;
+    margin-top: 6px;
+    overflow: hidden;
+    border: 1px solid rgba(201,168,108,0.3);
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: var(--sepia);
+    border-radius: 20px;
+    transition: width 0.2s;
+    width: 0%;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 700px) {
+    #appLayout { grid-template-columns: 1fr; }
+    #editorPanel { border-left: none; border-top: 1px solid var(--sepia); }
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <h1>Family Photo <span>Tagger</span></h1>
+  <div class="header-actions">
+    <button class="btn btn-ghost" id="openFolderBtn">📂 Open Folder</button>
+    <button class="btn btn-primary" id="exportBtn" disabled>💾 Save metadata.json</button>
+    <button class="btn btn-accent" id="generateBtn" disabled>✨ Generate Viewer</button>
+  </div>
+</header>
+
+<!-- Status bar -->
+<div id="statusBar">
+  <div class="dot"></div>
+  <span id="statusText">No folder open. Click "Open Folder" to begin.</span>
+  <div id="loadProgressBar"></div>
+</div>
+
+<!-- Landing screen -->
+<div id="landing">
+  <div class="ornament">✦</div>
+  <h2>Organize Your Family Memories</h2>
+  <p>Tag people, add dates, and build a searchable archive from your scanned photos. Your work saves as a simple <em>metadata.json</em> file alongside your photos.</p>
+  <div class="steps">
+    <div class="step"><div class="num">1</div><p>Click <strong>Open Folder</strong> — you'll be offered the option to generate thumbnails automatically.</p></div>
+    <div class="step"><div class="num">2</div><p>Click <strong>Open Folder</strong> and select your photos folder.</p></div>
+    <div class="step"><div class="num">3</div><p>Click any photo to tag people and add a date.</p></div>
+    <div class="step"><div class="num">4</div><p>Click <strong>Save metadata.json</strong> when done or periodically.</p></div>
+  </div>
+  <button class="btn btn-accent" style="margin-top:8px;font-size:1rem;padding:12px 32px;" id="landingOpenBtn">📂 Open Photos Folder</button>
+</div>
+
+
+<!-- Open Folder Modal -->
+<div id="folderModal">
+  <div class="modal-box">
+    <h3>Folder Ready</h3>
+    <div class="modal-folder-name" id="modalFolderName"></div>
+    <div class="modal-stat" id="modalStat"></div>
+    <label class="modal-check-row">
+      <input type="checkbox" id="thumbCheck" />
+      <span class="modal-check-label">
+        Generate / update thumbnails
+        <small>Uses your browser to resize photos into a thumbs/ subfolder. Skips any that are already up to date. Recommended for first open.</small>
+      </span>
+    </label>
+    <div id="thumbProgress">
+      <span id="thumbProgressText">Processing…</span>
+      <div class="progress-bar-wrap"><div class="progress-bar-fill" id="thumbProgressBar"></div></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" style="color:var(--ink-light);border-color:var(--sepia);" id="modalCancelBtn">Cancel</button>
+      <button class="btn btn-accent" id="modalOpenBtn">Open Photos</button>
+    </div>
+  </div>
+</div>
+
+<!-- Main app -->
+<div id="app">
+  <div id="appLayout">
+    <!-- Grid -->
+    <div id="gridPanel">
+      <!-- Full-size preview (shown when editing a photo) -->
+      <div id="fullPreviewPane">
+        <img id="fullPreviewImg" src="" alt="Full preview" />
+        <div id="previewSpinner"></div>
+        <div id="fullPreviewFilename"></div>
+        <button id="closePreviewBtn" title="Return to grid">✕</button>
+        <div id="previewNavBtns">
+          <button id="prevPhotoBtn" title="Previous photo (←)">&#8249;</button>
+          <button id="nextPhotoBtn" title="Next photo (→)">&#8250;</button>
+        </div>
+      </div>
+      <!-- Grid section (becomes a compact strip when preview is open) -->
+      <div id="gridSection" class="full">
+        <div id="gridToolbar">
+          <input id="searchInput" type="text" placeholder="Search filename…" />
+          <select id="filterPerson"><option value="">All people</option></select>
+          <span class="grid-stat" id="gridStat"></span>
+        </div>
+        <div id="photoGrid">
+          <div id="emptyGrid">No photos found in this folder.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Editor -->
+    <div id="editorPanel">
+      <div id="editorPlaceholder">
+        <div class="arrow">←</div>
+        <p>Select a photo from the grid to tag it.</p>
+      </div>
+
+      <div id="editorContent">
+        <div id="editorFilenameBlock">
+          <label class="field-label">Filename</label>
+          <div id="editorFilenameRow">
+            <span id="editorFilename"></span>
+            <button id="renameBtn" title="Rename file">✎</button>
+            <button id="deleteFileBtn">Delete</button>
+          </div>
+          <div id="renameRow">
+            <input id="renameInput" type="text" spellcheck="false" autocomplete="off" />
+            <button id="renameConfirmBtn">Rename</button>
+            <button id="renameCancelBtn">Cancel</button>
+          </div>
+        </div>
+        <!-- People tags -->
+        <div>
+          <label class="field-label">People in this photo</label>
+          <div class="tag-input-wrap" id="tagInputWrap">
+            <input id="tagText" type="text" placeholder="Type a name…" autocomplete="off" />
+            <div id="tagSuggestions"></div>
+          </div>
+          <div style="font-size:0.73rem;color:var(--faded);margin-top:4px;font-style:italic;">
+            Type to search or add new names. Press Enter or comma to confirm.
+          </div>
+        </div>
+
+        <!-- Date -->
+        <div>
+          <label class="field-label">Date</label>
+          <div class="date-fields">
+            <input id="dateYear"  type="number" placeholder="Year" min="1800" max="2099" />
+            <select id="dateMonth">
+              <option value="">Month</option>
+              <option value="01">January</option><option value="02">February</option>
+              <option value="03">March</option><option value="04">April</option>
+              <option value="05">May</option><option value="06">June</option>
+              <option value="07">July</option><option value="08">August</option>
+              <option value="09">September</option><option value="10">October</option>
+              <option value="11">November</option><option value="12">December</option>
+            </select>
+            <input id="dateDay" type="number" placeholder="Day" min="1" max="31" />
+          </div>
+          <div style="font-size:0.73rem;color:var(--faded);margin-top:4px;font-style:italic;">
+            All fields optional — enter only what you know.
+          </div>
+        </div>
+
+        <!-- Caption -->
+        <div>
+          <label class="field-label" for="captionInput">Caption / Notes</label>
+          <textarea id="captionInput" placeholder="Optional notes about this photo…"></textarea>
+        </div>
+
+        <!-- Save -->
+        <div class="save-row">
+          <button class="btn btn-accent" id="saveNextBtn">Save &amp; Next →</button>
+          <button class="btn btn-primary" id="savePhotoBtn">Save</button>
+          <button class="btn btn-discard" id="discardBtn">Discard</button>
+        </div>
+        <div id="saveStatus">Auto-saved ✓</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Export bar -->
+  <div id="exportBar">
+    <span id="exportStat">0 photos tagged</span>
+    <button class="btn btn-primary" id="exportBar2Btn">💾 Save metadata.json</button>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div id="lightbox">
+  <button id="lightboxClose">✕</button>
+  <img id="lightboxImg" src="" alt="" />
+  <div id="lightboxCaption"></div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────────────────────────
+let dirHandle = null;
+let photos = [];       // [{name, thumbUrl, fullUrl, fileHandle, thumbHandle}]
+let metadata = {};     // {filename: {people:[], date:'', caption:''}}
+let allPeople = [];    // master list of known names
+let thumbsDirHandle = null; // retained so rename/delete can access the thumbs subfolder
+let currentPhoto = null;
+let currentTags = [];
+let isDirty = false;
+let filteredPhotos = [];
+let suggestIdx = -1;
+let metaFileHandle = null;
+
+// ─────────────────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────────────────
+document.getElementById('openFolderBtn').addEventListener('click', openFolder);
+document.getElementById('landingOpenBtn').addEventListener('click', openFolder);
+document.getElementById('exportBtn').addEventListener('click', exportMetadata);
+document.getElementById('generateBtn').addEventListener('click', generateViewer);
+document.getElementById('exportBar2Btn').addEventListener('click', exportMetadata);
+document.getElementById('saveNextBtn').addEventListener('click', saveAndNext);
+document.getElementById('savePhotoBtn').addEventListener('click', saveCurrentPhoto);
+document.getElementById('discardBtn').addEventListener('click', discardChanges);
+document.getElementById('closePreviewBtn').addEventListener('click', closePreview);
+document.getElementById('prevPhotoBtn').addEventListener('click', () => {
+  const idx = filteredPhotos.findIndex(p => p.name === currentPhoto?.name);
+  if (idx > 0) { saveCurrentPhoto(); selectPhoto(filteredPhotos[idx - 1]); }
+});
+document.getElementById('nextPhotoBtn').addEventListener('click', () => {
+  const idx = filteredPhotos.findIndex(p => p.name === currentPhoto?.name);
+  if (idx !== -1 && idx < filteredPhotos.length - 1) { saveCurrentPhoto(); selectPhoto(filteredPhotos[idx + 1]); }
+});
+document.getElementById('renameBtn').addEventListener('click', () => {
+  const input = document.getElementById('renameInput');
+  input.value = currentPhoto?.name || '';
+  document.getElementById('editorFilenameRow').style.display = 'none';
+  const row = document.getElementById('renameRow');
+  row.style.display = 'flex';
+  input.focus();
+  input.select();
+});
+document.getElementById('renameCancelBtn').addEventListener('click', cancelRename);
+document.getElementById('renameInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); confirmRename(); }
+  if (e.key === 'Escape') cancelRename();
+});
+document.getElementById('renameConfirmBtn').addEventListener('click', confirmRename);
+document.getElementById('deleteFileBtn').addEventListener('click', deletePhoto);
+document.getElementById('lightboxClose').addEventListener('click', () => document.getElementById('lightbox').classList.remove('open'));
+document.getElementById('lightbox').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('open'); });
+document.getElementById('searchInput').addEventListener('input', applyFilters);
+document.getElementById('filterPerson').addEventListener('change', applyFilters);
+
+// Dirty tracking — mark unsaved changes
+function markDirty() { isDirty = true; }
+document.getElementById('dateYear').addEventListener('input', markDirty);
+document.getElementById('dateMonth').addEventListener('change', markDirty);
+document.getElementById('dateDay').addEventListener('input', markDirty);
+document.getElementById('captionInput').addEventListener('input', markDirty);
+
+// Keyboard navigation in edit view
+document.addEventListener('keydown', e => {
+  if (!currentPhoto) return;
+  const tag = document.activeElement?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  e.preventDefault();
+  const idx = filteredPhotos.findIndex(p => p.name === currentPhoto.name);
+  if (idx === -1) return;
+  if (e.key === 'ArrowRight' && idx < filteredPhotos.length - 1) {
+    saveCurrentPhoto();
+    selectPhoto(filteredPhotos[idx + 1]);
+  } else if (e.key === 'ArrowLeft' && idx > 0) {
+    saveCurrentPhoto();
+    selectPhoto(filteredPhotos[idx - 1]);
+  }
+});
+
+// Tag input
+const tagText = document.getElementById('tagText');
+const tagSuggestions = document.getElementById('tagSuggestions');
+const tagInputWrap = document.getElementById('tagInputWrap');
+
+tagText.addEventListener('input', onTagInput);
+tagText.addEventListener('keydown', onTagKeydown);
+tagText.addEventListener('blur', () => setTimeout(() => tagSuggestions.style.display = 'none', 150));
+tagInputWrap.addEventListener('click', () => tagText.focus());
+
+// ─────────────────────────────────────────────────────────────────
+// FOLDER OPEN
+// ─────────────────────────────────────────────────────────────────
+// Modal state
+let _pendingDirHandle = null;
+
+document.getElementById('modalCancelBtn').addEventListener('click', () => {
+  document.getElementById('folderModal').classList.remove('open');
+  _pendingDirHandle = null;
+});
+
+document.getElementById('modalOpenBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('modalOpenBtn');
+  const doThumbs = document.getElementById('thumbCheck').checked;
+  btn.disabled = true;
+  btn.textContent = 'Opening…';
+
+  dirHandle = _pendingDirHandle;
+
+  if (doThumbs) {
+    document.getElementById('thumbProgress').style.display = 'block';
+    await generateThumbsInBrowser();
+  }
+
+  document.getElementById('folderModal').classList.remove('open');
+  await loadFolder();
+  btn.disabled = false;
+  btn.textContent = 'Open Photos';
+});
+
+async function openFolder() {
+  try {
+    _pendingDirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+  } catch (e) {
+    if (e.name !== 'AbortError') setStatus('Could not open folder: ' + e.message);
+    return;
+  }
+
+  // Scan what's in the folder to populate modal
+  const EXTS = new Set(['.jpg','.jpeg','.png','.bmp','.tiff','.tif','.webp']);
+  let photoCount = 0;
+  let hasThumbs = false;
+  let hasMetadata = false;
+  let metaCount = 0;
+
+  try { await _pendingDirHandle.getDirectoryHandle('thumbs'); hasThumbs = true; } catch {}
+  try {
+    const mf = await _pendingDirHandle.getFileHandle('metadata.json');
+    const txt = await (await mf.getFile()).text();
+    const md = JSON.parse(txt);
+    metaCount = Object.keys(md).length;
+    hasMetadata = true;
+  } catch {}
+
+  for await (const entry of _pendingDirHandle.values()) {
+    if (entry.kind === 'file') {
+      const ext = entry.name.substring(entry.name.lastIndexOf('.')).toLowerCase();
+      if (EXTS.has(ext)) photoCount++;
+    }
+  }
+
+  document.getElementById('modalFolderName').textContent = _pendingDirHandle.name;
+  document.getElementById('modalStat').innerHTML =
+    `<strong>${photoCount}</strong> photo${photoCount !== 1 ? 's' : ''} found` +
+    (hasMetadata ? ` · <strong>${metaCount}</strong> already tagged` : ' · No existing tags') +
+    (hasThumbs ? ' · Thumbnails folder exists' : ' · No thumbnails yet');
+
+  // Default: check the box if no thumbs folder yet
+  document.getElementById('thumbCheck').checked = !hasThumbs;
+  document.getElementById('thumbProgress').style.display = 'none';
+  document.getElementById('thumbProgressText').textContent = 'Processing…';
+  document.getElementById('thumbProgressBar').style.width = '0%';
+
+  document.getElementById('folderModal').classList.add('open');
+}
+
+async function loadFolder() {
+  photos = [];
+  metadata = {};
+  metaFileHandle = null;
+
+  // Check for thumbs subfolder
+  let thumbsHandle = null;
+  try { thumbsHandle = await dirHandle.getDirectoryHandle('thumbs'); } catch {}
+  thumbsDirHandle = thumbsHandle;
+
+  // Load metadata (needed up-front for sort and filter)
+  try {
+    metaFileHandle = await dirHandle.getFileHandle('metadata.json');
+    const file = await metaFileHandle.getFile();
+    const text = await file.text();
+    metadata = JSON.parse(text);
+  } catch {
+    metadata = {};
+  }
+
+  // Collect all image entries first — just directory metadata, very fast even at scale
+  const EXTS = new Set(['.jpg','.jpeg','.png','.bmp','.tiff','.tif','.webp']);
+  const entries = [];
+  for await (const entry of dirHandle.values()) {
+    if (entry.kind !== 'file') continue;
+    const ext = entry.name.substring(entry.name.lastIndexOf('.')).toLowerCase();
+    if (EXTS.has(ext)) entries.push(entry);
+  }
+  entries.sort((a, b) => a.name.localeCompare(b.name)); // stable display order while loading
+
+  // Show app immediately so the user sees progress
+  rebuildPeopleList();
+  showApp();
+  renderGrid([]);
+  document.getElementById('exportBtn').disabled = false;
+  document.getElementById('generateBtn').disabled = false;
+  setLoadProgress(0, entries.length);
+
+  // Process entries in parallel batches — each batch fires ~50 concurrent getFileHandle/getFile calls
+  // instead of awaiting every photo one by one (which was ~3 serial IPC calls × N photos).
+  const BATCH_SIZE = 50;
+  for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+    const batch = entries.slice(i, i + BATCH_SIZE);
+    const batchPhotos = await Promise.all(batch.map(async entry => {
+      let thumbHandle = null;
+      if (thumbsHandle) {
+        const thumbName = entry.name.replace(/\.[^.]+$/, '.jpg');
+        try { thumbHandle = await thumbsHandle.getFileHandle(thumbName); } catch {}
+      }
+      const displayHandle = thumbHandle || entry;
+      const thumbFile = await displayHandle.getFile();
+      const thumbUrl = URL.createObjectURL(thumbFile);
+      // fullUrl is created lazily on first selection — saves one getFile() per photo at load time
+      return { name: entry.name, thumbUrl, fullUrl: null, fileHandle: entry, thumbHandle };
+    }));
+
+    photos.push(...batchPhotos);
+    filteredPhotos = [...photos];
+    appendToGrid(batchPhotos, entries.length);
+    setLoadProgress(i + batch.length, entries.length);
+  }
+
+  // Final sort by date then name, then re-render to apply correct ordering
+  photos.sort((a, b) => {
+    const da = metadata[a.name]?.date || '';
+    const db = metadata[b.name]?.date || '';
+    if (da && db) return da < db ? -1 : da > db ? 1 : 0;
+    if (da) return -1;
+    if (db) return 1;
+    return a.name.localeCompare(b.name);
+  });
+  renderGrid(photos);
+  setLoadProgress(null, 0);
+  if (!thumbsHandle && photos.length > 0) {
+    setStatus(`⚠ No "thumbs" folder — showing originals. Use "Generate Thumbnails" for better performance.`);
+  } else {
+    setStatus(`Opened: ${dirHandle.name} — ${photos.length} photo(s) found.`);
+  }
+  document.getElementById('exportBtn').disabled = false;
+  document.getElementById('generateBtn').disabled = false;
+}
+
+// Append a batch of newly-loaded photo cards without clearing the grid
+function appendToGrid(newPhotos, totalEntries) {
+  const grid = document.getElementById('photoGrid');
+  // Remove the empty-state placeholder left by renderGrid([]) on first batch
+  document.getElementById('emptyGrid')?.remove();
+  const stat = document.getElementById('gridStat');
+  stat.textContent = `${photos.length} of ${totalEntries} photos`;
+
+  newPhotos.forEach(photo => {
+    const meta = metadata[photo.name] || {};
+    const tagged = (meta.people?.length > 0) || meta.date || meta.caption;
+    const card = document.createElement('div');
+    card.className = 'photo-card';
+    card.dataset.name = photo.name;
+    card.innerHTML = `
+      <img src="${photo.thumbUrl}" alt="${photo.name}" loading="lazy" />
+      ${tagged ? '<div class="tagged-indicator" title="Tagged"></div>' : ''}
+      <div class="photo-card-meta">
+        <div class="photo-card-name">${photo.name}</div>
+        <div class="photo-card-tags">${(meta.people||[]).map(p=>`<span class="tag-pill">${p}</span>`).join('')}</div>
+        ${meta.date ? `<div class="photo-card-date">${formatDate(meta.date)}</div>` : ''}
+      </div>`;
+    card.addEventListener('click', () => selectPhoto(photo));
+    grid.appendChild(card);
+  });
+}
+
+// Show/hide the loading progress bar in the status bar
+function setLoadProgress(done, total) {
+  const bar = document.getElementById('loadProgressBar');
+  if (done === null) {
+    bar.style.opacity = '0';
+    bar.style.transition = 'opacity 0.4s ease';
+    setTimeout(() => { bar.style.display = 'none'; bar.style.opacity = '1'; bar.style.transition = ''; }, 400);
+    return;
+  }
+  bar.style.display = 'block';
+  bar.style.width = total > 0 ? (done / total * 100) + '%' : '0%';
+  if (done < total) setStatus(`Loading… ${done} / ${total} photos`);
+}
+
+// Create and cache a full-size object URL on demand (deferred from load time)
+async function ensureFullUrl(photo) {
+  if (photo.fullUrl) return photo.fullUrl;
+  if (!photo._fullUrlPending) {
+    photo._fullUrlPending = photo.fileHandle.getFile()
+      .then(f => { photo.fullUrl = URL.createObjectURL(f); return photo.fullUrl; });
+  }
+  return photo._fullUrlPending;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// UI SWITCHES
+// ─────────────────────────────────────────────────────────────────
+function showApp() {
+  document.getElementById('landing').style.display = 'none';
+  const app = document.getElementById('app');
+  app.style.display = '';
+  app.classList.add('visible');
+}
+
+function setStatus(msg) {
+  document.getElementById('statusText').textContent = msg;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// GRID RENDER
+// ─────────────────────────────────────────────────────────────────
+function renderGrid(list) {
+  filteredPhotos = list;
+  const grid = document.getElementById('photoGrid');
+  grid.innerHTML = '';
+
+  if (!list.length) {
+    grid.innerHTML = '<div id="emptyGrid">No photos match the current filter.</div>';
+    document.getElementById('gridStat').textContent = '';
+    return;
+  }
+
+  document.getElementById('gridStat').textContent = `${list.length} of ${photos.length} photos`;
+
+  list.forEach(photo => {
+    const meta = metadata[photo.name] || {};
+    const tagged = (meta.people?.length > 0) || meta.date || meta.caption;
+
+    const card = document.createElement('div');
+    card.className = 'photo-card' + (currentPhoto?.name === photo.name ? ' selected' : '');
+    card.dataset.name = photo.name;
+
+    card.innerHTML = `
+      <img src="${photo.thumbUrl}" alt="${photo.name}" loading="lazy" />
+      ${tagged ? '<div class="tagged-indicator" title="Tagged"></div>' : ''}
+      <div class="photo-card-meta">
+        <div class="photo-card-name">${photo.name}</div>
+        <div class="photo-card-tags">${(meta.people||[]).map(p=>`<span class="tag-pill">${p}</span>`).join('')}</div>
+        ${meta.date ? `<div class="photo-card-date">${formatDate(meta.date)}</div>` : ''}
+      </div>`;
+
+    card.addEventListener('click', () => selectPhoto(photo));
+    grid.appendChild(card);
+  });
+
+  updateExportStat();
+}
+
+function applyFilters() {
+  const search = document.getElementById('searchInput').value.toLowerCase().trim();
+  const person = document.getElementById('filterPerson').value;
+
+  let list = photos;
+  if (search) list = list.filter(p => p.name.toLowerCase().includes(search));
+  if (person) list = list.filter(p => (metadata[p.name]?.people || []).includes(person));
+  renderGrid(list);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// PHOTO SELECTION / EDITOR
+// ─────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
+// IMAGE PRELOAD CACHE
+// ─────────────────────────────────────────────────────────────────
+const preloadCache = new Map(); // url → decoded HTMLImageElement
+
+// Decode a full-size image off the main thread, cache the result
+function preloadImage(url) {
+  if (preloadCache.has(url)) return preloadCache.get(url);
+  const img = new Image();
+  const promise = new Promise((resolve) => {
+    img.src = url;
+    img.decode()
+      .then(() => resolve(img))
+      .catch(() => { img.src = url; resolve(img); }); // fallback: just resolve anyway
+  });
+  preloadCache.set(url, promise);
+  return promise;
+}
+
+// Kick off background preload for N photos in both directions from the current index
+function preloadAdjacent(currentIdx, n = 2) {
+  for (let i = 1; i <= n; i++) {
+    const next = filteredPhotos[currentIdx + i];
+    if (next) ensureFullUrl(next).then(url => preloadImage(url));
+    const prev = filteredPhotos[currentIdx - i];
+    if (prev) ensureFullUrl(prev).then(url => preloadImage(url));
+  }
+}
+
+async function selectPhoto(photo) {
+  currentPhoto = photo;
+  const meta = metadata[photo.name] || {};
+
+  document.getElementById('editorPlaceholder').style.display = 'none';
+  const content = document.getElementById('editorContent');
+  content.style.display = 'flex';
+
+  // Show pane immediately, spinner on, image hidden while decoding
+  const previewPane = document.getElementById('fullPreviewPane');
+  previewPane.classList.add('visible');
+  document.getElementById('fullPreviewFilename').textContent = photo.name;
+  document.getElementById('gridSection').classList.remove('full');
+  document.getElementById('gridSection').classList.add('strip');
+
+  // Populate editor fields right away (no waiting on image)
+  const pd = parsePartialDate(meta.date || '');
+  document.getElementById('dateYear').value  = pd.year;
+  document.getElementById('dateMonth').value = pd.month;
+  document.getElementById('dateDay').value   = pd.day;
+  document.getElementById('captionInput').value = meta.caption || '';
+  currentTags = [...(meta.people || [])];
+  isDirty = false;
+  renderTagChips();
+
+  // Highlight card + scroll into strip view
+  document.querySelectorAll('.photo-card').forEach(c => {
+    const isSelected = c.dataset.name === photo.name;
+    c.classList.toggle('selected', isSelected);
+    if (isSelected) c.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  });
+  hideSuggestions();
+  document.getElementById('editorPanel').scrollTop = 0;
+
+  // Decode image asynchronously — show spinner, swap in when ready
+  const displayImg = document.getElementById('fullPreviewImg');
+  previewPane.classList.add('loading-img');
+  displayImg.classList.add('loading');
+
+  try {
+    const url = await ensureFullUrl(photo);
+    const decoded = await preloadImage(url);
+    // Only apply if this photo is still the current one
+    if (currentPhoto?.name === photo.name) {
+      displayImg.src = decoded.src;
+      displayImg.classList.remove('loading');
+      previewPane.classList.remove('loading-img');
+    }
+  } catch {
+    displayImg.src = photo.fullUrl || ''; // fallback
+    displayImg.classList.remove('loading');
+    previewPane.classList.remove('loading-img');
+  }
+
+  // Kick off background preload for upcoming photos; update nav button states
+  const idx = filteredPhotos.findIndex(p => p.name === photo.name);
+  if (idx !== -1) preloadAdjacent(idx);
+  document.getElementById('prevPhotoBtn').disabled = idx <= 0;
+  document.getElementById('nextPhotoBtn').disabled = idx === -1 || idx >= filteredPhotos.length - 1;
+  document.getElementById('editorFilename').textContent = photo.name;
+  // Ensure rename row is hidden when switching photos
+  document.getElementById('renameRow').style.display = 'none';
+  document.getElementById('editorFilenameRow').style.display = 'flex';
+}
+
+function saveCurrentPhoto() {
+  if (!currentPhoto) return;
+  metadata[currentPhoto.name] = {
+    people: [...currentTags],
+    date: buildPartialDate(),
+    caption: document.getElementById('captionInput').value.trim()
+  };
+
+  rebuildPeopleList();
+  applyFilters();
+  updateExportStat();
+
+  isDirty = false;
+  // Auto-save metadata.json to disk
+  exportMetadata(true);
+
+  const s = document.getElementById('saveStatus');
+  s.classList.add('show');
+  setTimeout(() => s.classList.remove('show'), 2000);
+}
+
+function closePreview() {
+  if (isDirty) {
+    const choice = confirm('You have unsaved changes.\n\nOK = Save & close\nCancel = Discard & close');
+    if (choice) saveCurrentPhoto();
+  }
+  // Return to full grid view
+  document.getElementById('fullPreviewPane').classList.remove('visible');
+  document.getElementById('gridSection').classList.remove('strip');
+  document.getElementById('gridSection').classList.add('full');
+  document.querySelectorAll('.photo-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('editorPlaceholder').style.display = '';
+  document.getElementById('editorContent').style.display = 'none';
+  currentPhoto = null;
+  isDirty = false;
+}
+
+function saveAndNext() {
+  saveCurrentPhoto();
+  // Find the next photo in the filtered list
+  const idx = filteredPhotos.findIndex(p => p.name === currentPhoto?.name);
+  if (idx !== -1 && idx < filteredPhotos.length - 1) {
+    selectPhoto(filteredPhotos[idx + 1]);
+  }
+}
+
+function discardChanges() {
+  if (!currentPhoto) return;
+  isDirty = false;
+  // Re-select the same photo to reload saved metadata
+  selectPhoto(currentPhoto);
+  const s = document.getElementById('saveStatus');
+  s.textContent = 'Changes discarded';
+  s.style.color = '#a05050';
+  s.classList.add('show');
+  setTimeout(() => {
+    s.classList.remove('show');
+    s.textContent = 'Auto-saved ✓';
+    s.style.color = '#6aaa6a';
+  }, 1800);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// RENAME / DELETE
+// ─────────────────────────────────────────────────────────────────
+function cancelRename() {
+  document.getElementById('renameRow').style.display = 'none';
+  document.getElementById('editorFilenameRow').style.display = 'flex';
+}
+
+async function confirmRename() {
+  if (!currentPhoto) return;
+  let newName = document.getElementById('renameInput').value.trim();
+  if (!newName || newName === currentPhoto.name) { cancelRename(); return; }
+
+  // Preserve the original extension if the user omitted or changed it
+  const oldExt = currentPhoto.name.substring(currentPhoto.name.lastIndexOf('.')).toLowerCase();
+  const inputExt = newName.includes('.') ? newName.substring(newName.lastIndexOf('.')).toLowerCase() : '';
+  if (inputExt !== oldExt) {
+    newName = (newName.includes('.') ? newName.substring(0, newName.lastIndexOf('.')) : newName) + oldExt;
+  }
+
+  const btn = document.getElementById('renameConfirmBtn');
+  btn.disabled = true;
+  btn.textContent = 'Renaming…';
+  const ok = await renamePhoto(currentPhoto, newName);
+  btn.disabled = false;
+  btn.textContent = 'Rename';
+  if (ok) cancelRename();
+}
+
+async function renamePhoto(photo, newName) {
+  const oldName = photo.name;
+
+  // Check if target name is already taken
+  try {
+    await dirHandle.getFileHandle(newName);
+    alert(`A file named "${newName}" already exists.`);
+    return false;
+  } catch {} // expected — file doesn't exist yet
+
+  try {
+    // Copy file contents to new name
+    const srcFile = await photo.fileHandle.getFile();
+    const newHandle = await dirHandle.getFileHandle(newName, { create: true });
+    const writable = await newHandle.createWritable();
+    await writable.write(await srcFile.arrayBuffer());
+    await writable.close();
+
+    // Delete the original
+    await dirHandle.removeEntry(oldName);
+
+    // Rename the thumbnail too if it exists
+    let newThumbHandle = photo.thumbHandle;
+    if (thumbsDirHandle && photo.thumbHandle) {
+      try {
+        const oldThumbName = oldName.replace(/\.[^.]+$/, '.jpg');
+        const newThumbName = newName.replace(/\.[^.]+$/, '.jpg');
+        const thumbFile = await photo.thumbHandle.getFile();
+        const nt = await thumbsDirHandle.getFileHandle(newThumbName, { create: true });
+        const tw = await nt.createWritable();
+        await tw.write(await thumbFile.arrayBuffer());
+        await tw.close();
+        await thumbsDirHandle.removeEntry(oldThumbName);
+        newThumbHandle = nt;
+      } catch {}
+    }
+
+    // Update metadata key
+    if (metadata[oldName]) {
+      metadata[newName] = metadata[oldName];
+      delete metadata[oldName];
+    }
+
+    // Update the photo object in-place
+    photo.name = newName;
+    photo.fileHandle = newHandle;
+    photo.thumbHandle = newThumbHandle;
+    if (photo.fullUrl) { URL.revokeObjectURL(photo.fullUrl); photo.fullUrl = null; }
+    photo._fullUrlPending = null;
+
+    // Update the grid card
+    const card = document.querySelector(`.photo-card[data-name="${oldName}"]`);
+    if (card) {
+      card.dataset.name = newName;
+      const nameEl = card.querySelector('.photo-card-name');
+      if (nameEl) nameEl.textContent = newName;
+    }
+
+    // Update editor filename display
+    document.getElementById('editorFilename').textContent = newName;
+    document.getElementById('fullPreviewFilename').textContent = newName;
+    document.getElementById('editorFilenameBlock').querySelector('.field-label').textContent = 'Filename';
+
+    await exportMetadata(true);
+    setStatus(`Renamed to "${newName}"`);
+    return true;
+  } catch (e) {
+    alert(`Rename failed: ${e.message}`);
+    return false;
+  }
+}
+
+async function deletePhoto() {
+  if (!currentPhoto) return;
+  const photo = currentPhoto;
+  const name = photo.name;
+
+  if (!confirm(`Permanently delete "${name}" from disk?\n\nThis cannot be undone.`)) return;
+
+  try {
+    await dirHandle.removeEntry(name);
+
+    // Delete the thumbnail too
+    if (thumbsDirHandle && photo.thumbHandle) {
+      try { await thumbsDirHandle.removeEntry(name.replace(/\.[^.]+$/, '.jpg')); } catch {}
+    }
+
+    // Revoke cached object URLs
+    if (photo.thumbUrl) URL.revokeObjectURL(photo.thumbUrl);
+    if (photo.fullUrl)  URL.revokeObjectURL(photo.fullUrl);
+
+    // Find where we are before mutating the arrays
+    const fIdx = filteredPhotos.findIndex(p => p.name === name);
+    const nextPhoto = filteredPhotos[fIdx + 1] || filteredPhotos[fIdx - 1] || null;
+
+    // Remove from state
+    photos = photos.filter(p => p.name !== name);
+    filteredPhotos = filteredPhotos.filter(p => p.name !== name);
+    delete metadata[name];
+
+    // Remove the grid card
+    document.querySelector(`.photo-card[data-name="${name}"]`)?.remove();
+    document.getElementById('gridStat').textContent = `${filteredPhotos.length} of ${photos.length} photos`;
+
+    // Navigate away
+    isDirty = false;
+    if (nextPhoto) {
+      selectPhoto(nextPhoto);
+    } else {
+      closePreview();
+    }
+
+    updateExportStat();
+    await exportMetadata(true);
+    setStatus(`Deleted "${name}"`);
+  } catch (e) {
+    alert(`Delete failed: ${e.message}`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// TAG INPUT
+// ─────────────────────────────────────────────────────────────────
+function renderTagChips() {
+  // Remove existing chips
+  tagInputWrap.querySelectorAll('.tag-chip').forEach(c => c.remove());
+  currentTags.forEach(name => {
+    const chip = document.createElement('div');
+    chip.className = 'tag-chip';
+    chip.innerHTML = `${name}<button type="button" data-name="${name}" title="Remove">×</button>`;
+    chip.querySelector('button').addEventListener('click', () => {
+      currentTags = currentTags.filter(t => t !== name);
+      isDirty = true;
+      renderTagChips();
+    });
+    tagInputWrap.insertBefore(chip, tagText);
+  });
+}
+
+function onTagInput() {
+  const val = tagText.value.trim();
+  if (val.endsWith(',')) {
+    commitTag(val.slice(0, -1).trim());
+    return;
+  }
+  if (!val) { hideSuggestions(); return; }
+
+  const lower = val.toLowerCase();
+  const matches = allPeople.filter(p => p.toLowerCase().startsWith(lower) && !currentTags.includes(p));
+  if (matches.length) {
+    showSuggestions(matches);
+  } else {
+    hideSuggestions();
+  }
+}
+
+function onTagKeydown(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (suggestIdx >= 0) {
+      const items = tagSuggestions.querySelectorAll('.suggestion-item');
+      if (items[suggestIdx]) commitTag(items[suggestIdx].textContent);
+    } else {
+      commitTag(tagText.value.trim());
+    }
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    moveSuggest(1);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    moveSuggest(-1);
+  } else if (e.key === 'Backspace' && tagText.value === '' && currentTags.length) {
+    currentTags.pop();
+    renderTagChips();
+  } else if (e.key === 'Escape') {
+    hideSuggestions();
+  }
+}
+
+function commitTag(name) {
+  name = name.trim();
+  if (!name) return;
+  if (!currentTags.includes(name)) currentTags.push(name);
+  if (!allPeople.includes(name)) allPeople.push(name);
+  tagText.value = '';
+  isDirty = true;
+  renderTagChips();
+  hideSuggestions();
+}
+
+function showSuggestions(names) {
+  suggestIdx = -1;
+  tagSuggestions.innerHTML = names.map(n => `<div class="suggestion-item">${n}</div>`).join('');
+  tagSuggestions.querySelectorAll('.suggestion-item').forEach(el => {
+    el.addEventListener('mousedown', () => commitTag(el.textContent));
+  });
+  tagSuggestions.style.display = 'block';
+}
+
+function hideSuggestions() {
+  tagSuggestions.style.display = 'none';
+  suggestIdx = -1;
+}
+
+function moveSuggest(dir) {
+  const items = tagSuggestions.querySelectorAll('.suggestion-item');
+  if (!items.length) return;
+  items[suggestIdx]?.classList.remove('active');
+  suggestIdx = Math.max(0, Math.min(items.length - 1, suggestIdx + dir));
+  items[suggestIdx].classList.add('active');
+}
+
+// ─────────────────────────────────────────────────────────────────
+// LIGHTBOX
+// ─────────────────────────────────────────────────────────────────
+function openLightbox() {
+  if (!currentPhoto) return;
+  document.getElementById('lightboxImg').src = currentPhoto.fullUrl;
+  const meta = metadata[currentPhoto.name] || {};
+  let cap = '';
+  if (meta.people?.length) cap += meta.people.join(', ');
+  if (meta.date) cap += (cap ? ' · ' : '') + formatDate(meta.date);
+  if (meta.caption) cap += (cap ? ' · ' : '') + meta.caption;
+  document.getElementById('lightboxCaption').textContent = cap;
+  document.getElementById('lightbox').classList.add('open');
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+// IN-BROWSER THUMBNAIL GENERATION (Canvas API)
+// ─────────────────────────────────────────────────────────────────
+async function generateThumbsInBrowser() {
+  const THUMB_MAX = 400;
+  const EXTS = new Set(['.jpg','.jpeg','.png','.bmp','.tiff','.tif','.webp']);
+
+  // Get or create thumbs dir
+  const thumbsDir = await _pendingDirHandle.getDirectoryHandle('thumbs', { create: true });
+
+  // Collect photo files
+  const files = [];
+  for await (const entry of _pendingDirHandle.values()) {
+    if (entry.kind !== 'file') continue;
+    const ext = entry.name.substring(entry.name.lastIndexOf('.')).toLowerCase();
+    if (EXTS.has(ext)) files.push(entry);
+  }
+
+  // Check which thumbs already exist & are current
+  const toProcess = [];
+  for (const entry of files) {
+    const thumbName = entry.name.replace(/\.[^.]+$/, '.jpg');
+    let needsUpdate = true;
+    try {
+      const thumbHandle = await thumbsDir.getFileHandle(thumbName);
+      const [src, th] = await Promise.all([entry.getFile(), thumbHandle.getFile()]);
+      if (th.lastModified >= src.lastModified) needsUpdate = false;
+    } catch {}
+    if (needsUpdate) toProcess.push(entry);
+  }
+
+  const progressText = document.getElementById('thumbProgressText');
+  const progressBar  = document.getElementById('thumbProgressBar');
+
+  if (toProcess.length === 0) {
+    progressText.textContent = `All ${files.length} thumbnails are up to date.`;
+    progressBar.style.width = '100%';
+    await new Promise(r => setTimeout(r, 800));
+    return;
+  }
+
+  // ── Parallel processing via Web Workers ──────────────────────────
+  // Worker code: receives a File, resizes with OffscreenCanvas, returns JPEG blob
+  const workerSrc = `
+    self.onmessage = async ({ data: { file, thumbMax } }) => {
+      try {
+        const bmp = await createImageBitmap(file);
+        let { width: w, height: h } = bmp;
+        if (w > thumbMax || h > thumbMax) {
+          const scale = thumbMax / Math.max(w, h);
+          w = Math.round(w * scale);
+          h = Math.round(h * scale);
+        }
+        const canvas = new OffscreenCanvas(w, h);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(bmp, 0, 0, w, h);
+        bmp.close();
+        const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.85 });
+        self.postMessage({ ok: true, blob });
+      } catch (e) {
+        self.postMessage({ ok: false, error: e.message });
+      }
+    };
+  `;
+  const workerUrl = URL.createObjectURL(new Blob([workerSrc], { type: 'text/javascript' }));
+
+  // Use up to 8 workers — enough to saturate most machines, avoids memory pressure
+  const WORKER_COUNT = Math.min(8, navigator.hardwareConcurrency || 4);
+  progressText.textContent = `Starting ${WORKER_COUNT} parallel workers…`;
+
+  // Create worker pool
+  const workers = Array.from({ length: WORKER_COUNT }, () => new Worker(workerUrl));
+
+  let completed = 0;
+  let queueIdx  = 0;
+  let errors    = 0;
+
+  // Returns a promise that processes one photo on a given worker
+  function runWorker(worker, entry) {
+    return new Promise(async (resolve) => {
+      try {
+        const file = await entry.getFile();
+        worker.onmessage = async ({ data }) => {
+          if (data.ok) {
+            try {
+              const thumbName = entry.name.replace(/\.[^.]+$/, '.jpg');
+              const thumbHandle = await thumbsDir.getFileHandle(thumbName, { create: true });
+              const writable = await thumbHandle.createWritable();
+              await writable.write(data.blob);
+              await writable.close();
+            } catch (e) {
+              errors++;
+              console.warn('Write failed:', entry.name, e);
+            }
+          } else {
+            errors++;
+            console.warn('Worker failed:', entry.name, data.error);
+          }
+          completed++;
+          progressText.textContent = `Generating thumbnails… ${completed} of ${toProcess.length} (${WORKER_COUNT} threads)`;
+          progressBar.style.width = (completed / toProcess.length * 100) + '%';
+          resolve();
+        };
+        worker.postMessage({ file, thumbMax: THUMB_MAX });
+      } catch (e) {
+        errors++;
+        completed++;
+        resolve();
+      }
+    });
+  }
+
+  // Feed workers a continuous queue — when one finishes, it picks up the next job
+  async function drainQueue(worker) {
+    while (queueIdx < toProcess.length) {
+      const entry = toProcess[queueIdx++];
+      await runWorker(worker, entry);
+    }
+  }
+
+  // Start all workers draining the queue simultaneously
+  await Promise.all(workers.map(w => drainQueue(w)));
+
+  // Cleanup
+  workers.forEach(w => w.terminate());
+  URL.revokeObjectURL(workerUrl);
+
+  const errNote = errors > 0 ? ` (${errors} error${errors > 1 ? 's' : ''})` : '';
+  progressText.textContent = `Done! Generated ${completed - errors} thumbnail${completed !== 1 ? 's' : ''}${errNote}.`;
+  await new Promise(r => setTimeout(r, 600));
+}
+
+// ─────────────────────────────────────────────────────────────────
+// EXPORT
+// ─────────────────────────────────────────────────────────────────
+async function exportMetadata(silent = false) {
+  if (!dirHandle) return;
+
+  const json = JSON.stringify(metadata, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+
+  try {
+    if (!metaFileHandle) {
+      metaFileHandle = await dirHandle.getFileHandle('metadata.json', { create: true });
+    }
+    const writable = await metaFileHandle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+    if (!silent) setStatus(`metadata.json saved to ${dirHandle.name} — ${Object.keys(metadata).length} photo(s) tagged.`);
+  } catch (e) {
+    if (!silent) {
+      // Fallback: trigger browser download
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'metadata.json'; a.click();
+      URL.revokeObjectURL(url);
+      setStatus('Saved via download (move metadata.json into your photos folder).');
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────────────────────────
+function rebuildPeopleList() {
+  const names = new Set();
+  Object.values(metadata).forEach(m => (m.people || []).forEach(n => names.add(n)));
+  allPeople = [...names].sort();
+
+  const sel = document.getElementById('filterPerson');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">All people</option>';
+  allPeople.forEach(n => {
+    const opt = document.createElement('option');
+    opt.value = n; opt.textContent = n;
+    sel.appendChild(opt);
+  });
+  sel.value = current;
+}
+
+function updateExportStat() {
+  const tagged = Object.values(metadata).filter(m => m.people?.length || m.date || m.caption).length;
+  document.getElementById('exportStat').innerHTML = `<span>${tagged}</span> of ${photos.length} photos tagged`;
+}
+
+function parsePartialDate(d) {
+  if (!d) return { year: '', month: '', day: '' };
+  const parts = d.split('-');
+  return { year: parts[0] || '', month: parts[1] || '', day: parts[2] || '' };
+}
+
+function buildPartialDate() {
+  const y = document.getElementById('dateYear').value.trim();
+  const m = document.getElementById('dateMonth').value;
+  const d = String(document.getElementById('dateDay').value.trim()).padStart(2, '0');
+  if (!y) return '';
+  if (!m) return y;
+  if (!d || d === '00') return y + '-' + m;
+  return y + '-' + m + '-' + d;
+}
+
+function formatDate(d) {
+  if (!d) return '';
+  const parts = d.split('-');
+  const year = parts[0], month = parts[1], day = parts[2];
+  if (!month) return year;
+  const monthNames = ['January','February','March','April','May','June',
+                      'July','August','September','October','November','December'];
+  const monthName = monthNames[parseInt(month, 10) - 1] || month;
+  if (!day) return monthName + ' ' + year;
+  try {
+    return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  } catch { return d; }
+}
+
+// Check for API support
+if (!('showDirectoryPicker' in window)) {
+  document.getElementById('statusText').textContent = '⚠ This tool requires Google Chrome or Microsoft Edge. Other browsers are not supported.';
+}
+
+// ─────────────────────────────────────────────────────────────────
+// VIEWER GENERATION
+// ─────────────────────────────────────────────────────────────────
+const VIEWER_TEMPLATE = "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\"/>\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0\"/>\n<title>Family Photos</title>\n<style>\n  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Lora:ital,wght@0,400;0,500;1,400&display=swap');\n\n  :root {\n    --ink:        #1e1309;\n    --ink-mid:    #4a3728;\n    --ink-light:  #7a6050;\n    --paper:      #f8f0e3;\n    --paper-mid:  #ede0cc;\n    --paper-dark: #e0cdb5;\n    --sepia:      #c9a86c;\n    --sepia-dark: #9a7840;\n    --accent:     #7b3f2a;\n    --shadow:     rgba(30,19,9,0.22);\n    --green:      #5a8a5a;\n  }\n  *, *::before, *::after { box-sizing: border-box; margin:0; padding:0; }\n\n  html { scroll-behavior: smooth; }\n\n  body {\n    background: var(--ink);\n    color: var(--paper);\n    font-family: 'Lora', Georgia, serif;\n    min-height: 100vh;\n  }\n\n  /* \u2500\u2500 Hero Header \u2500\u2500 */\n  #hero {\n    background: var(--ink);\n    padding: 52px 40px 36px;\n    text-align: center;\n    position: relative;\n    overflow: hidden;\n    border-bottom: 2px solid var(--sepia-dark);\n  }\n  #hero::before {\n    content: '';\n    position: absolute;\n    inset: 0;\n    background:\n      radial-gradient(ellipse at 20% 50%, rgba(201,168,108,0.07) 0%, transparent 60%),\n      radial-gradient(ellipse at 80% 50%, rgba(123,63,42,0.08) 0%, transparent 60%);\n    pointer-events: none;\n  }\n  .hero-ornament {\n    font-family: 'Playfair Display', serif;\n    font-size: 1rem;\n    color: var(--sepia);\n    letter-spacing: 0.4em;\n    text-transform: uppercase;\n    opacity: 0.7;\n    margin-bottom: 14px;\n  }\n  #hero h1 {\n    font-family: 'Playfair Display', serif;\n    font-size: clamp(2rem, 5vw, 3.4rem);\n    font-weight: 700;\n    color: var(--paper);\n    line-height: 1.15;\n    margin-bottom: 10px;\n  }\n  #hero h1 em {\n    font-style: italic;\n    color: var(--sepia);\n  }\n  .hero-sub {\n    color: var(--ink-light);\n    font-size: 0.88rem;\n    font-style: italic;\n    letter-spacing: 0.03em;\n  }\n  .hero-rule {\n    width: 80px;\n    height: 1px;\n    background: var(--sepia);\n    margin: 18px auto 0;\n    opacity: 0.5;\n  }\n\n  /* \u2500\u2500 Controls \u2500\u2500 */\n  #controls {\n    background: var(--ink-mid);\n    padding: 16px 32px;\n    display: flex;\n    gap: 14px;\n    align-items: center;\n    flex-wrap: wrap;\n    border-bottom: 1px solid rgba(201,168,108,0.2);\n    position: sticky;\n    top: 0;\n    z-index: 50;\n  }\n\n  .ctrl-label {\n    font-size: 0.72rem;\n    letter-spacing: 0.1em;\n    text-transform: uppercase;\n    color: var(--sepia);\n    font-family: 'Lora', serif;\n    white-space: nowrap;\n  }\n\n  .ctrl-pills {\n    display: flex;\n    flex-wrap: wrap;\n    gap: 6px;\n    flex: 1;\n  }\n\n  .pill {\n    background: rgba(201,168,108,0.12);\n    border: 1px solid rgba(201,168,108,0.3);\n    color: var(--paper-mid);\n    font-family: 'Lora', serif;\n    font-size: 0.8rem;\n    padding: 5px 14px;\n    border-radius: 20px;\n    cursor: pointer;\n    transition: all 0.15s;\n    white-space: nowrap;\n  }\n  .pill:hover { background: rgba(201,168,108,0.22); border-color: var(--sepia); }\n  .pill.active {\n    background: var(--sepia);\n    border-color: var(--sepia);\n    color: var(--ink);\n    font-weight: 600;\n  }\n\n  #searchBox {\n    font-family: 'Lora', serif;\n    font-size: 0.82rem;\n    padding: 6px 14px;\n    background: rgba(255,255,255,0.06);\n    border: 1px solid rgba(201,168,108,0.3);\n    border-radius: 20px;\n    color: var(--paper);\n    outline: none;\n    width: 180px;\n    transition: border-color 0.15s;\n  }\n  #searchBox::placeholder { color: var(--ink-light); }\n  #searchBox:focus { border-color: var(--sepia); }\n\n  .photo-count {\n    font-size: 0.75rem;\n    color: var(--ink-light);\n    font-style: italic;\n    margin-left: auto;\n    white-space: nowrap;\n  }\n\n  /* \u2500\u2500 Grid \u2500\u2500 */\n  #main { padding: 28px 24px 60px; }\n\n  #grid {\n    display: grid;\n    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));\n    gap: 18px;\n  }\n\n  .card {\n    background: var(--paper-dark);\n    border-radius: 2px;\n    overflow: hidden;\n    cursor: pointer;\n    box-shadow: 3px 3px 14px var(--shadow), 0 0 0 1px rgba(201,168,108,0.15);\n    transition: transform 0.18s, box-shadow 0.18s;\n    position: relative;\n  }\n  .card:hover {\n    transform: translateY(-4px) scale(1.01);\n    box-shadow: 6px 10px 28px var(--shadow), 0 0 0 1px rgba(201,168,108,0.4);\n  }\n\n  /* Polaroid-style white border */\n  .card-img-wrap {\n    padding: 10px 10px 0;\n    background: var(--paper);\n  }\n  .card img {\n    width: 100%;\n    aspect-ratio: 1;\n    object-fit: cover;\n    display: block;\n    filter: sepia(20%) contrast(1.05) brightness(0.97);\n    transition: filter 0.2s;\n  }\n  .card:hover img { filter: sepia(8%) contrast(1.07) brightness(1.0); }\n\n  .card-body {\n    background: var(--paper);\n    padding: 10px 12px 12px;\n  }\n  .card-caption {\n    font-family: 'Lora', serif;\n    font-size: 0.8rem;\n    color: var(--ink-mid);\n    font-style: italic;\n    line-height: 1.4;\n    margin-bottom: 6px;\n    min-height: 1.1em;\n  }\n  .card-date {\n    font-size: 0.7rem;\n    color: var(--ink-light);\n    margin-bottom: 6px;\n    font-style: italic;\n  }\n  .card-tags {\n    display: flex;\n    flex-wrap: wrap;\n    gap: 4px;\n  }\n  .card-tag {\n    background: var(--sepia-dark);\n    color: var(--paper);\n    font-size: 0.65rem;\n    padding: 2px 8px;\n    border-radius: 20px;\n    letter-spacing: 0.02em;\n  }\n\n  /* \u2500\u2500 Empty state \u2500\u2500 */\n  #empty {\n    display: none;\n    text-align: center;\n    padding: 80px 20px;\n    color: var(--ink-light);\n    font-style: italic;\n    font-size: 0.95rem;\n    grid-column: 1/-1;\n  }\n\n  /* \u2500\u2500 Lightbox \u2500\u2500 */\n  #lb {\n    display: none;\n    position: fixed;\n    inset: 0;\n    background: rgba(10,6,2,0.96);\n    z-index: 200;\n    align-items: center;\n    justify-content: center;\n    flex-direction: column;\n    gap: 0;\n  }\n  #lb.open { display: flex; }\n\n  #lbClose {\n    position: absolute;\n    top: 16px; right: 20px;\n    background: none; border: none;\n    color: var(--paper-mid);\n    font-size: 1.8rem;\n    cursor: pointer;\n    opacity: 0.6;\n    font-family: serif;\n    line-height: 1;\n    z-index: 10;\n  }\n  #lbClose:hover { opacity: 1; }\n\n  #lbPrev, #lbNext {\n    position: absolute;\n    top: 50%; transform: translateY(-50%);\n    background: rgba(201,168,108,0.15);\n    border: 1px solid rgba(201,168,108,0.3);\n    color: var(--paper);\n    font-size: 1.6rem;\n    width: 44px; height: 44px;\n    border-radius: 50%;\n    cursor: pointer;\n    display: flex; align-items: center; justify-content: center;\n    transition: background 0.15s;\n    z-index: 10;\n  }\n  #lbPrev { left: 16px; }\n  #lbNext { right: 16px; }\n  #lbPrev:hover, #lbNext:hover { background: rgba(201,168,108,0.35); }\n\n  #lbImg {\n    max-width: min(90vw, 900px);\n    max-height: 78vh;\n    object-fit: contain;\n    box-shadow: 0 0 80px rgba(0,0,0,0.8);\n    filter: sepia(10%) contrast(1.04);\n    border: 6px solid var(--paper);\n  }\n\n  #lbMeta {\n    margin-top: 16px;\n    text-align: center;\n    max-width: 600px;\n    padding: 0 20px;\n  }\n  #lbPeople {\n    font-family: 'Playfair Display', serif;\n    font-size: 1.05rem;\n    color: var(--paper);\n    margin-bottom: 4px;\n  }\n  #lbDate {\n    font-size: 0.82rem;\n    color: var(--sepia);\n    font-style: italic;\n    margin-bottom: 5px;\n  }\n  #lbCaption {\n    font-size: 0.85rem;\n    color: var(--ink-light);\n    font-style: italic;\n    line-height: 1.5;\n  }\n  #lbCounter {\n    font-size: 0.72rem;\n    color: var(--ink-light);\n    margin-top: 8px;\n    letter-spacing: 0.05em;\n  }\n\n  /* \u2500\u2500 Footer \u2500\u2500 */\n  footer {\n    background: var(--ink);\n    border-top: 1px solid rgba(201,168,108,0.15);\n    text-align: center;\n    padding: 20px;\n    font-size: 0.75rem;\n    color: var(--ink-light);\n    font-style: italic;\n  }\n\n  /* \u2500\u2500 Scrollbar \u2500\u2500 */\n  ::-webkit-scrollbar { width: 6px; }\n  ::-webkit-scrollbar-track { background: var(--ink); }\n  ::-webkit-scrollbar-thumb { background: var(--sepia-dark); border-radius: 3px; }\n\n  @media (max-width: 600px) {\n    #hero { padding: 36px 20px 24px; }\n    #controls { padding: 12px 16px; }\n    #grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }\n    #lbPrev { left: 6px; } #lbNext { right: 6px; }\n  }\n</style>\n</head>\n<body>\n\n<div id=\"hero\">\n  <div class=\"hero-ornament\">\u2726 &nbsp; A Family Archive &nbsp; \u2726</div>\n  <h1 id=\"heroTitle\">Family <em>Photographs</em></h1>\n  <div class=\"hero-rule\"></div>\n  <p class=\"hero-sub\" id=\"heroSub\"></p>\n</div>\n\n<div id=\"controls\">\n  <span class=\"ctrl-label\">Filter by</span>\n  <div class=\"ctrl-pills\" id=\"peoplePills\">\n    <button class=\"pill active\" data-person=\"\">Everyone</button>\n  </div>\n  <input id=\"searchBox\" type=\"text\" placeholder=\"Search captions\u2026\" />\n  <span class=\"photo-count\" id=\"photoCount\"></span>\n</div>\n\n<div id=\"main\">\n  <div id=\"grid\">\n    <div id=\"empty\">No photos match this filter.</div>\n  </div>\n</div>\n\n<footer>These photographs were lovingly preserved for our family.</footer>\n\n<!-- Lightbox -->\n<div id=\"lb\">\n  <button id=\"lbClose\">\u2715</button>\n  <button id=\"lbPrev\">&#8249;</button>\n  <button id=\"lbNext\">&#8250;</button>\n  <img id=\"lbImg\" src=\"\" alt=\"\" />\n  <div id=\"lbMeta\">\n    <div id=\"lbPeople\"></div>\n    <div id=\"lbDate\"></div>\n    <div id=\"lbCaption\"></div>\n    <div id=\"lbCounter\"></div>\n  </div>\n</div>\n\n<script>\n// \u2500\u2500 METADATA (injected by tagger) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nconst METADATA = __METADATA_JSON__;\nconst TITLE    = \"__TITLE__\";\n// \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\ndocument.getElementById('heroTitle').innerHTML = TITLE\n  ? TITLE.replace(/(.+)/, (_, t) => {\n      const words = t.split(' ');\n      const last = words.pop();\n      return (words.length ? words.join(' ') + ' ' : '') + '<em>' + last + '</em>';\n    })\n  : 'Family <em>Photographs</em>';\n\n// Build photo list from metadata\nlet photos = Object.entries(METADATA).map(([filename, meta]) => ({\n  filename,\n  thumb: 'thumbs/' + filename.replace(/\\.[^.]+$/, '.jpg'),\n  full: filename,\n  people: meta.people || [],\n  date: meta.date || '',\n  caption: meta.caption || ''\n}));\n\n// Sort by date, undated last\nphotos.sort((a, b) => {\n  if (a.date && b.date) return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;\n  if (a.date) return -1;\n  if (b.date) return 1;\n  return a.filename.localeCompare(b.filename);\n});\n\n// Build people list\nconst allPeople = [...new Set(photos.flatMap(p => p.people))].sort();\nconst pillsContainer = document.getElementById('peoplePills');\nallPeople.forEach(name => {\n  const btn = document.createElement('button');\n  btn.className = 'pill';\n  btn.dataset.person = name;\n  btn.textContent = name;\n  pillsContainer.appendChild(btn);\n});\n\ndocument.getElementById('heroSub').textContent =\n  photos.length + ' photographs' + (allPeople.length ? ' \u00b7 ' + allPeople.length + ' people' : '');\n\n// \u2500\u2500 Filtering \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nlet activePerson = '';\nlet searchTerm = '';\nlet filtered = [...photos];\nlet lbIndex = 0;\n\nfunction applyFilter() {\n  const lower = searchTerm.toLowerCase();\n  filtered = photos.filter(p => {\n    const matchPerson = !activePerson || p.people.includes(activePerson);\n    const matchSearch = !lower ||\n      p.caption.toLowerCase().includes(lower) ||\n      p.people.some(n => n.toLowerCase().includes(lower)) ||\n      p.filename.toLowerCase().includes(lower);\n    return matchPerson && matchSearch;\n  });\n  renderGrid();\n}\n\npillsContainer.addEventListener('click', e => {\n  const btn = e.target.closest('.pill');\n  if (!btn) return;\n  activePerson = btn.dataset.person;\n  pillsContainer.querySelectorAll('.pill').forEach(p => p.classList.toggle('active', p === btn));\n  applyFilter();\n});\n\ndocument.getElementById('searchBox').addEventListener('input', e => {\n  searchTerm = e.target.value.trim();\n  applyFilter();\n});\n\n// \u2500\u2500 Grid render \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction renderGrid() {\n  const grid = document.getElementById('grid');\n  const empty = document.getElementById('empty');\n  document.getElementById('photoCount').textContent =\n    filtered.length === photos.length\n      ? photos.length + ' photos'\n      : filtered.length + ' of ' + photos.length + ' photos';\n\n  // Remove old cards\n  grid.querySelectorAll('.card').forEach(c => c.remove());\n\n  if (!filtered.length) { empty.style.display = 'block'; return; }\n  empty.style.display = 'none';\n\n  filtered.forEach((photo, idx) => {\n    const card = document.createElement('div');\n    card.className = 'card';\n    card.innerHTML = \\`\n      <div class=\"card-img-wrap\">\n        <img src=\"\\${photo.thumb}\" alt=\"\\${photo.filename}\" loading=\"lazy\"\n             onerror=\"this.src='\\${photo.full}'\" />\n      </div>\n      <div class=\"card-body\">\n        <div class=\"card-caption\">\\${photo.caption || '&nbsp;'}</div>\n        \\${photo.date ? \\`<div class=\"card-date\">\\${fmtDate(photo.date)}</div>\\` : ''}\n        <div class=\"card-tags\">\\${photo.people.map(p => \\`<span class=\"card-tag\">\\${p}</span>\\`).join('')}</div>\n      </div>\\`;\n    card.addEventListener('click', () => openLb(idx));\n    grid.appendChild(card);\n  });\n}\n\n// \u2500\u2500 Lightbox \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction openLb(idx) {\n  lbIndex = idx;\n  showLb();\n  document.getElementById('lb').classList.add('open');\n}\n\nfunction showLb() {\n  const p = filtered[lbIndex];\n  document.getElementById('lbImg').src = p.full;\n  document.getElementById('lbPeople').textContent = p.people.join(' \u00b7 ') || '';\n  document.getElementById('lbDate').textContent = p.date ? fmtDate(p.date) : '';\n  document.getElementById('lbCaption').textContent = p.caption || '';\n  document.getElementById('lbCounter').textContent = (lbIndex + 1) + ' of ' + filtered.length;\n}\n\ndocument.getElementById('lbClose').addEventListener('click', () => document.getElementById('lb').classList.remove('open'));\ndocument.getElementById('lb').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('open'); });\ndocument.getElementById('lbPrev').addEventListener('click', () => { lbIndex = (lbIndex - 1 + filtered.length) % filtered.length; showLb(); });\ndocument.getElementById('lbNext').addEventListener('click', () => { lbIndex = (lbIndex + 1) % filtered.length; showLb(); });\n\ndocument.addEventListener('keydown', e => {\n  const lb = document.getElementById('lb');\n  if (!lb.classList.contains('open')) return;\n  if (e.key === 'ArrowRight') { lbIndex = (lbIndex + 1) % filtered.length; showLb(); }\n  if (e.key === 'ArrowLeft')  { lbIndex = (lbIndex - 1 + filtered.length) % filtered.length; showLb(); }\n  if (e.key === 'Escape') lb.classList.remove('open');\n});\n\n// \u2500\u2500 Helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction fmtDate(d) {\n  if (!d) return '';\n  const parts = d.split('-');\n  const year = parts[0], month = parts[1], day = parts[2];\n  if (!month) return year;\n  const names = ['January','February','March','April','May','June','July','August','September','October','November','December'];\n  const mn = names[parseInt(month,10)-1] || month;\n  if (!day) return mn + ' ' + year;\n  try { return new Date(d + 'T12:00:00').toLocaleDateString('en-US', {year:'numeric',month:'short',day:'numeric'}); }\n  catch { return d; }\n}\n\n// \u2500\u2500 Init \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nrenderGrid();\n<\/script>\n</body>\n</html>";
+
+async function generateViewer() {
+  if (!dirHandle) return;
+
+  const title = prompt('Enter a title for the viewer (e.g. "The Johnson Family"):', dirHandle.name) || dirHandle.name;
+
+  // Include ALL loaded photos, not just tagged ones. Untagged get empty defaults.
+  const fullMeta = {};
+  for (const photo of photos) {
+    fullMeta[photo.name] = metadata[photo.name] || { people: [], date: '', caption: '' };
+  }
+
+  const metaJson = JSON.stringify(fullMeta, null, 2);
+  const html = VIEWER_TEMPLATE
+    .replace('__METADATA_JSON__', metaJson)
+    .replace('__TITLE__', title.replace(/'/g, "\\'")); 
+
+  // Unescape template literal syntax that was escaped for storage inside the tagger.
+  // \` and \${ are valid inside JS template literals but cause syntax errors in
+  // plain HTML files — strip the backslashes before writing to disk.
+  const safeHtml = html.replace(/\\`/g, '`').replace(/\\\${/g, '${');
+
+  const blob = new Blob([safeHtml], { type: 'text/html' });
+
+  try {
+    const viewerHandle = await dirHandle.getFileHandle('index.html', { create: true });
+    const writable = await viewerHandle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+    setStatus(`✨ index.html generated in ${dirHandle.name} — ready to copy to flash drive!`);
+  } catch (e) {
+    // Fallback download
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'index.html'; a.click();
+    URL.revokeObjectURL(url);
+    setStatus('index.html downloaded — move it into your photos folder alongside metadata.json.');
+  }
+}
+
+</script>
+</body>
+</html>
