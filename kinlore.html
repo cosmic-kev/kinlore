@@ -1066,7 +1066,7 @@
       <input type="checkbox" id="thumbCheck" />
       <span class="modal-check-label">
         Generate / update thumbnails
-        <small>Uses your browser to resize photos into a thumbs/ subfolder. Skips any that are already up to date. Recommended for first open.</small>
+        <small>Uses your browser to resize photos into a _kinlore/thumbs/ subfolder. Skips any that are already up to date. Recommended for first open.</small>
       </span>
     </label>
     <div id="thumbProgress">
@@ -1210,6 +1210,7 @@ let photos = [];       // [{name, thumbUrl, fullUrl, fileHandle, thumbHandle}]
 let metadata = {};     // {filename: {people:[], date:'', caption:''}}
 let allPeople = [];    // master list of known names
 let thumbsDirHandle = null; // retained so rename/delete can access the thumbs subfolder
+let kinloreDirHandle = null; // _kinlore/ admin subfolder
 let currentPhoto = null;
 let currentTags = [];
 let isDirty = false;
@@ -1346,14 +1347,26 @@ async function openFolder() {
   let hasMetadata = false;
   let metaCount = 0;
 
-  try { await _pendingDirHandle.getDirectoryHandle('thumbs'); hasThumbs = true; } catch {}
+  // Check _kinlore/ subdir first, fall back to root for backward compatibility
+  try { await _pendingDirHandle.getDirectoryHandle('_kinlore').then(d => d.getDirectoryHandle('thumbs')); hasThumbs = true; } catch {}
+  if (!hasThumbs) { try { await _pendingDirHandle.getDirectoryHandle('thumbs'); hasThumbs = true; } catch {} }
   try {
-    const mf = await _pendingDirHandle.getFileHandle('metadata.json');
+    const kinloreDir = await _pendingDirHandle.getDirectoryHandle('_kinlore');
+    const mf = await kinloreDir.getFileHandle('metadata.json');
     const txt = await (await mf.getFile()).text();
     const md = JSON.parse(txt);
     metaCount = Object.values(md).filter(m => (m.people?.length > 0) || m.date || m.caption).length;
     hasMetadata = true;
   } catch {}
+  if (!hasMetadata) {
+    try {
+      const mf = await _pendingDirHandle.getFileHandle('metadata.json');
+      const txt = await (await mf.getFile()).text();
+      const md = JSON.parse(txt);
+      metaCount = Object.values(md).filter(m => (m.people?.length > 0) || m.date || m.caption).length;
+      hasMetadata = true;
+    } catch {}
+  }
 
   for await (const entry of _pendingDirHandle.values()) {
     if (entry.kind === 'file') {
@@ -1382,19 +1395,41 @@ async function loadFolder() {
   metadata = {};
   metaFileHandle = null;
 
-  // Check for thumbs subfolder
+  // Get or create _kinlore admin subdir
+  kinloreDirHandle = null;
+  try { kinloreDirHandle = await dirHandle.getDirectoryHandle('_kinlore', { create: true }); } catch {}
+
+  // Check for thumbs subfolder (_kinlore/thumbs first, fall back to root)
   let thumbsHandle = null;
-  try { thumbsHandle = await dirHandle.getDirectoryHandle('thumbs'); } catch {}
+  if (kinloreDirHandle) {
+    try { thumbsHandle = await kinloreDirHandle.getDirectoryHandle('thumbs'); } catch {}
+  }
+  if (!thumbsHandle) {
+    try { thumbsHandle = await dirHandle.getDirectoryHandle('thumbs'); } catch {}
+  }
   thumbsDirHandle = thumbsHandle;
 
-  // Load metadata (needed up-front for sort and filter)
-  try {
-    metaFileHandle = await dirHandle.getFileHandle('metadata.json');
-    const file = await metaFileHandle.getFile();
-    const text = await file.text();
-    metadata = JSON.parse(text);
-  } catch {
-    metadata = {};
+  // Load metadata (_kinlore/metadata.json first, fall back to root)
+  if (kinloreDirHandle) {
+    try {
+      metaFileHandle = await kinloreDirHandle.getFileHandle('metadata.json');
+      const file = await metaFileHandle.getFile();
+      metadata = JSON.parse(await file.text());
+    } catch {
+      // Fall back to root metadata.json (legacy)
+      try {
+        const rootMeta = await dirHandle.getFileHandle('metadata.json');
+        const file = await rootMeta.getFile();
+        metadata = JSON.parse(await file.text());
+        // Don't assign metaFileHandle — exportMetadata will create _kinlore/metadata.json
+      } catch { metadata = {}; }
+    }
+  } else {
+    try {
+      metaFileHandle = await dirHandle.getFileHandle('metadata.json');
+      const file = await metaFileHandle.getFile();
+      metadata = JSON.parse(await file.text());
+    } catch { metadata = {}; }
   }
 
   // Collect all image entries first — just directory metadata, very fast even at scale
@@ -2043,8 +2078,10 @@ async function generateThumbsInBrowser() {
   const THUMB_MAX = 400;
   const EXTS = new Set(['.jpg','.jpeg','.png','.bmp','.tiff','.tif','.webp']);
 
-  // Get or create thumbs dir
-  const thumbsDir = await _pendingDirHandle.getDirectoryHandle('thumbs', { create: true });
+  // Get or create _kinlore admin subdir, then thumbs inside it
+  let _adminDir;
+  try { _adminDir = await _pendingDirHandle.getDirectoryHandle('_kinlore', { create: true }); } catch { _adminDir = _pendingDirHandle; }
+  const thumbsDir = await _adminDir.getDirectoryHandle('thumbs', { create: true });
 
   // Collect photo files
   const files = [];
@@ -2179,7 +2216,8 @@ async function exportMetadata(silent = false) {
 
   try {
     if (!metaFileHandle) {
-      metaFileHandle = await dirHandle.getFileHandle('metadata.json', { create: true });
+      const adminDir = kinloreDirHandle || dirHandle;
+      metaFileHandle = await adminDir.getFileHandle('metadata.json', { create: true });
     }
     const writable = await metaFileHandle.createWritable();
     await writable.write(blob);
