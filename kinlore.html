@@ -1297,15 +1297,28 @@ document.getElementById('dateMonth').addEventListener('blur', () => {
     el.classList.remove('field-error');
   }
 });
-document.getElementById('dateDay').addEventListener('input', markDirty);
+document.getElementById('dateDay').addEventListener('input', () => {
+  markDirty();
+  const el = document.getElementById('dateDay');
+  if (el.value === '') { el.classList.remove('field-error'); return; }
+  const v = parseInt(el.value, 10);
+  el.classList.toggle('field-error', isNaN(v) || v < 1 || v > 31);
+});
+document.getElementById('dateDay').addEventListener('blur', () => {
+  const el = document.getElementById('dateDay');
+  const v = parseInt(el.value, 10);
+  if (el.value !== '' && (isNaN(v) || v === 0)) {
+    el.value = '';
+    el.classList.remove('field-error');
+  }
+});
 document.getElementById('captionInput').addEventListener('input', markDirty);
 
 // Keyboard navigation in edit view
 document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.ctrlKey && currentPhoto) {
     e.preventDefault();
-    saveAndNext();
-    setTimeout(() => document.getElementById('tagText')?.focus(), 0);
+    if (saveAndNext()) setTimeout(() => document.getElementById('tagText')?.focus(), 0);
     return;
   }
   if (!currentPhoto) return;
@@ -1786,12 +1799,15 @@ async function selectPhoto(photo) {
   document.getElementById('editorFilenameRow').style.display = 'flex';
   // Clear any validation error state from previous photo
   document.getElementById('dateMonth').classList.remove('field-error');
+  document.getElementById('dateDay').classList.remove('field-error');
 }
 
 function saveCurrentPhoto() {
   if (!currentPhoto) return false;
-  if (document.getElementById('dateMonth').classList.contains('field-error')) {
-    document.getElementById('dateMonth').focus();
+  const monthEl = document.getElementById('dateMonth');
+  const dayEl = document.getElementById('dateDay');
+  if (monthEl.classList.contains('field-error') || dayEl.classList.contains('field-error')) {
+    (monthEl.classList.contains('field-error') ? monthEl : dayEl).focus();
     return false;
   }
   metadata[currentPhoto.name] = {
@@ -1834,8 +1850,9 @@ function saveAndNext() {
   // Capture next photo before saving — applyFilters() may remove current photo from filteredPhotos
   const idx = filteredPhotos.findIndex(p => p.name === currentPhoto?.name);
   const next = (idx !== -1 && idx < filteredPhotos.length - 1) ? filteredPhotos[idx + 1] : null;
-  if (!saveCurrentPhoto()) return;
+  if (!saveCurrentPhoto()) return false;
   if (next) selectPhoto(next);
+  return true;
 }
 
 function discardChanges() {
