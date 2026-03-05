@@ -763,6 +763,7 @@
     border-color: var(--sepia);
     box-shadow: 0 0 0 3px rgba(200,146,78,0.15);
   }
+  .field-error { border-color: #c0474a !important; box-shadow: 0 0 0 3px rgba(192,71,74,0.18) !important; }
   #dateYear  { flex: 1; min-width: 0; }
   #dateMonth { flex: 2; min-width: 0; }
   #dateDay   { flex: 1; min-width: 0; }
@@ -1284,9 +1285,16 @@ document.getElementById('dateYear').addEventListener('input', markDirty);
 document.getElementById('dateMonth').addEventListener('input', () => {
   markDirty();
   const el = document.getElementById('dateMonth');
+  if (el.value === '') { el.classList.remove('field-error'); return; }
   const v = parseInt(el.value, 10);
-  if (el.value !== '' && (isNaN(v) || v < 1 || v > 12)) {
-    el.value = isNaN(v) ? '' : Math.min(12, Math.max(1, v));
+  el.classList.toggle('field-error', isNaN(v) || v < 1 || v > 12);
+});
+document.getElementById('dateMonth').addEventListener('blur', () => {
+  const el = document.getElementById('dateMonth');
+  const v = parseInt(el.value, 10);
+  if (el.value !== '' && (isNaN(v) || v === 0)) {
+    el.value = '';
+    el.classList.remove('field-error');
   }
 });
 document.getElementById('dateDay').addEventListener('input', markDirty);
@@ -1776,10 +1784,16 @@ async function selectPhoto(photo) {
   // Ensure rename row is hidden when switching photos
   document.getElementById('renameRow').style.display = 'none';
   document.getElementById('editorFilenameRow').style.display = 'flex';
+  // Clear any validation error state from previous photo
+  document.getElementById('dateMonth').classList.remove('field-error');
 }
 
 function saveCurrentPhoto() {
-  if (!currentPhoto) return;
+  if (!currentPhoto) return false;
+  if (document.getElementById('dateMonth').classList.contains('field-error')) {
+    document.getElementById('dateMonth').focus();
+    return false;
+  }
   metadata[currentPhoto.name] = {
     people: [...currentTags],
     date: buildPartialDate(),
@@ -1797,6 +1811,7 @@ function saveCurrentPhoto() {
   const s = document.getElementById('saveStatus');
   s.classList.add('show');
   setTimeout(() => s.classList.remove('show'), 2000);
+  return true;
 }
 
 function closePreview() {
@@ -1819,7 +1834,7 @@ function saveAndNext() {
   // Capture next photo before saving — applyFilters() may remove current photo from filteredPhotos
   const idx = filteredPhotos.findIndex(p => p.name === currentPhoto?.name);
   const next = (idx !== -1 && idx < filteredPhotos.length - 1) ? filteredPhotos[idx + 1] : null;
-  saveCurrentPhoto();
+  if (!saveCurrentPhoto()) return;
   if (next) selectPhoto(next);
 }
 
