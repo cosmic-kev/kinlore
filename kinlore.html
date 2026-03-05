@@ -81,6 +81,7 @@
     color: var(--paper);
   }
   .btn-accent:hover { background: #6e2a12; }
+  .save-hint { font-size: 0.72rem; opacity: 0.4; color: var(--ink); margin-top: 4px; }
   .btn-ghost {
     background: transparent;
     color: var(--paper);
@@ -1182,6 +1183,7 @@
           <button class="btn btn-primary" id="savePhotoBtn">Save</button>
           <button class="btn btn-discard" id="discardBtn">Discard</button>
         </div>
+        <div class="save-hint">Ctrl+Enter to save &amp; advance</div>
         <div id="saveStatus">Auto-saved ✓</div>
       </div>
     </div>
@@ -1275,6 +1277,12 @@ document.getElementById('captionInput').addEventListener('input', markDirty);
 
 // Keyboard navigation in edit view
 document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.ctrlKey && currentPhoto) {
+    e.preventDefault();
+    saveAndNext();
+    setTimeout(() => document.getElementById('tagText')?.focus(), 0);
+    return;
+  }
   if (!currentPhoto) return;
   const tag = document.activeElement?.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
@@ -2000,7 +2008,7 @@ function onTagInput() {
 }
 
 function onTagKeydown(e) {
-  if (e.key === 'Enter') {
+  if (e.key === 'Enter' && !e.ctrlKey) {
     e.preventDefault();
     if (suggestIdx >= 0) {
       const items = tagSuggestions.querySelectorAll('.suggestion-item');
