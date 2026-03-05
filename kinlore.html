@@ -1194,7 +1194,7 @@
           <button class="btn btn-primary" id="savePhotoBtn">Save</button>
           <button class="btn btn-discard" id="discardBtn">Discard</button>
         </div>
-        <div class="save-hint">Ctrl+Enter to save &amp; advance</div>
+        <div class="save-hint">Ctrl+Enter to save &amp; advance &nbsp;·&nbsp; Alt+← / Alt+→ to navigate</div>
         <div id="saveStatus">Auto-saved ✓</div>
       </div>
     </div>
@@ -1319,6 +1319,17 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && e.ctrlKey && currentPhoto) {
     e.preventDefault();
     if (saveAndNext()) setTimeout(() => document.getElementById('tagText')?.focus(), 0);
+    return;
+  }
+  if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && e.altKey && currentPhoto) {
+    e.preventDefault();
+    const idx = filteredPhotos.findIndex(p => p.name === currentPhoto.name);
+    if (idx === -1) return;
+    if (e.key === 'ArrowRight' && idx < filteredPhotos.length - 1) {
+      if (saveCurrentPhoto() !== false) selectPhoto(filteredPhotos[idx + 1]);
+    } else if (e.key === 'ArrowLeft' && idx > 0) {
+      if (saveCurrentPhoto() !== false) selectPhoto(filteredPhotos[idx - 1]);
+    }
     return;
   }
   if (!currentPhoto) return;
