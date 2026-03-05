@@ -294,30 +294,32 @@
   }
   #editorFilenameRow {
     display: flex;
-    align-items: center;
+    flex-direction: column;
     gap: 6px;
-    margin-top: 4px;
   }
   #editorFilename {
     font-size: 0.88rem;
     color: var(--ink);
     font-family: 'Courier New', monospace;
     word-break: break-all;
-    flex: 1;
+  }
+  #filenameButtons {
+    display: flex;
+    gap: 6px;
   }
   #renameBtn {
-    background: rgba(30,19,9,0.05);
-    border: 1px solid rgba(201,168,108,0.35);
+    background: transparent;
+    border: 1px solid rgba(139,109,80,0.45);
     color: var(--ink-light);
-    width: 24px; height: 24px;
-    border-radius: 50%;
-    font-size: 0.9rem;
+    font-size: 0.72rem;
+    padding: 3px 9px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
     flex-shrink: 0;
-    transition: background 0.15s;
+    font-family: var(--ui-font);
+    transition: background 0.15s, color 0.15s;
   }
-  #renameBtn:hover { background: var(--paper-dark); border-color: var(--sepia); }
+  #renameBtn:hover { background: var(--paper-dark); border-color: var(--sepia); color: var(--ink); }
   #deleteFileBtn {
     background: transparent;
     border: 1px solid rgba(192,112,112,0.5);
@@ -331,6 +333,19 @@
     transition: background 0.15s, color 0.15s;
   }
   #deleteFileBtn:hover { background: #fef2f2; border-color: #a05050; color: #7a2020; }
+  #metaRenameBtn {
+    background: transparent;
+    border: 1px solid rgba(139,109,80,0.45);
+    color: var(--ink-light);
+    font-size: 0.72rem;
+    padding: 3px 9px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    flex-shrink: 0;
+    font-family: var(--ui-font);
+    transition: background 0.15s, color 0.15s;
+  }
+  #metaRenameBtn:hover { background: var(--paper-dark); border-color: var(--sepia); color: var(--ink); }
   #renameRow {
     display: none;
     align-items: center;
@@ -1129,8 +1144,11 @@
           <label class="field-label">Filename</label>
           <div id="editorFilenameRow">
             <span id="editorFilename"></span>
-            <button id="renameBtn" title="Rename file">✎</button>
-            <button id="deleteFileBtn">Delete</button>
+            <div id="filenameButtons">
+              <button id="renameBtn">Rename</button>
+              <button id="metaRenameBtn">Auto-rename</button>
+              <button id="deleteFileBtn">Delete</button>
+            </div>
           </div>
           <div id="renameRow">
             <input id="renameInput" type="text" spellcheck="false" autocomplete="off" />
@@ -1825,6 +1843,50 @@ function discardChanges() {
 // ─────────────────────────────────────────────────────────────────
 // RENAME / DELETE
 // ─────────────────────────────────────────────────────────────────
+function generatePhotoName(photo, meta) {
+  const parts = [];
+  if (meta.date) parts.push(meta.date);
+  if (meta.people?.length) {
+    const people = [...meta.people].sort().map(p =>
+      p.replace(/[^a-zA-Z0-9 -]/g, '').trim()
+    ).filter(Boolean);
+    parts.push(...people);
+  }
+  if (meta.caption) {
+    const cap = meta.caption.trim()
+      .replace(/\s+/g, '_')
+      .replace(/[^a-zA-Z0-9_-]/g, '')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 30);
+    if (cap) parts.push(cap);
+  }
+  if (!parts.length) return null;
+  const ext = photo.name.match(/\.[^.]+$/)?.[0]?.toLowerCase() || '.jpg';
+  const base = parts.join('_').slice(0, 100);
+  return base + ext;
+}
+
+document.getElementById('metaRenameBtn').addEventListener('click', async () => {
+  if (!currentPhoto) return;
+  const meta = metadata[currentPhoto.name] || {};
+  const newName = generatePhotoName(currentPhoto, meta);
+  if (!newName) {
+    alert('No metadata to generate a name from. Add people, a date, or a caption first.');
+    return;
+  }
+  if (newName === currentPhoto.name) {
+    alert('This file is already correctly named.');
+    return;
+  }
+  if (!confirm(
+    `Auto-rename will rename this file based on its tagged metadata.\n\n` +
+    `From: "${currentPhoto.name}"\n` +
+    `To:   "${newName}"\n\n` +
+    `The original file, thumbnail, and metadata will all be updated.`
+  )) return;
+  await renamePhoto(currentPhoto, newName);
+});
+
 function cancelRename() {
   document.getElementById('renameRow').style.display = 'none';
   document.getElementById('editorFilenameRow').style.display = 'flex';
