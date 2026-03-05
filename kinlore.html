@@ -758,14 +758,14 @@
     color: var(--ink);
     transition: border-color 0.15s, box-shadow 0.15s;
   }
-  .date-fields input:focus, .date-fields select:focus {
+  .date-fields input:focus {
     outline: none;
     border-color: var(--sepia);
     box-shadow: 0 0 0 3px rgba(200,146,78,0.15);
   }
-  #dateYear  { width: 72px; }
-  #dateMonth { flex: 1; min-width: 0; }
-  #dateDay   { width: 56px; }
+  #dateYear  { flex: 1; min-width: 0; }
+  #dateMonth { flex: 2; min-width: 0; }
+  #dateDay   { flex: 1; min-width: 0; }
 
   /* Caption */
   #captionInput {
@@ -1173,15 +1173,7 @@
           <label class="field-label">Date</label>
           <div class="date-fields">
             <input id="dateYear"  type="number" placeholder="Year" min="1800" max="2099" />
-            <select id="dateMonth">
-              <option value="">Month</option>
-              <option value="01">January</option><option value="02">February</option>
-              <option value="03">March</option><option value="04">April</option>
-              <option value="05">May</option><option value="06">June</option>
-              <option value="07">July</option><option value="08">August</option>
-              <option value="09">September</option><option value="10">October</option>
-              <option value="11">November</option><option value="12">December</option>
-            </select>
+            <input id="dateMonth" type="number" placeholder="Month" min="1" max="12" />
             <input id="dateDay" type="number" placeholder="Day" min="1" max="31" />
           </div>
           <div style="font-size:0.73rem;color:var(--faded);margin-top:4px;font-style:italic;">
@@ -1289,7 +1281,14 @@ document.getElementById('filterTagged').addEventListener('change', applyFilters)
 // Dirty tracking — mark unsaved changes
 function markDirty() { isDirty = true; }
 document.getElementById('dateYear').addEventListener('input', markDirty);
-document.getElementById('dateMonth').addEventListener('change', markDirty);
+document.getElementById('dateMonth').addEventListener('input', () => {
+  markDirty();
+  const el = document.getElementById('dateMonth');
+  const v = parseInt(el.value, 10);
+  if (el.value !== '' && (isNaN(v) || v < 1 || v > 12)) {
+    el.value = isNaN(v) ? '' : Math.min(12, Math.max(1, v));
+  }
+});
 document.getElementById('dateDay').addEventListener('input', markDirty);
 document.getElementById('captionInput').addEventListener('input', markDirty);
 
@@ -2328,7 +2327,8 @@ function parsePartialDate(d) {
 
 function buildPartialDate() {
   const y = document.getElementById('dateYear').value.trim();
-  const m = document.getElementById('dateMonth').value;
+  const mRaw = document.getElementById('dateMonth').value.trim();
+  const m = mRaw ? String(parseInt(mRaw, 10)).padStart(2, '0') : '';
   const d = String(document.getElementById('dateDay').value.trim()).padStart(2, '0');
   if (!y) return '';
   if (!m) return y;
