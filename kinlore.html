@@ -1403,6 +1403,14 @@ document.addEventListener('keydown', e => {
   if (!currentPhoto) return;
   const tag = document.activeElement?.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  if (!e.ctrlKey && !e.altKey && !e.metaKey && e.key.length === 1) {
+    const tagText = document.getElementById('tagText');
+    tagText.focus();
+    tagText.value += e.key;
+    tagText.dispatchEvent(new Event('input', { bubbles: true }));
+    e.preventDefault();
+    return;
+  }
   if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
   e.preventDefault();
   const idx = filteredPhotos.findIndex(p => p.name === currentPhoto.name);
