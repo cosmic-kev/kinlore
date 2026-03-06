@@ -897,6 +897,32 @@
     justify-content: center;
   }
   #folderModal.open { display: flex; }
+  #logModal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(20,12,5,0.85);
+    z-index: 300;
+    align-items: center;
+    justify-content: center;
+  }
+  #logModal.open { display: flex; }
+  .log-modal-box { width: min(820px, 94vw); max-height: 86vh; display: flex; flex-direction: column; }
+  #logContent {
+    flex: 1;
+    overflow-y: auto;
+    font-size: 0.72rem;
+    font-family: monospace;
+    white-space: pre-wrap;
+    word-break: break-all;
+    background: #1a1008;
+    color: #c8b89a;
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    min-height: 120px;
+    max-height: calc(86vh - 120px);
+    line-height: 1.6;
+  }
   .modal-box {
     background: var(--paper);
     color: var(--ink);
@@ -1085,6 +1111,17 @@
   </div>
 </div>
 
+<!-- Log viewer modal -->
+<div id="logModal">
+  <div class="modal-box log-modal-box">
+    <h3>Activity Log</h3>
+    <pre id="logContent"></pre>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="logCloseBtn">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- Main app -->
 <div id="app">
   <div id="appLayout">
@@ -1196,7 +1233,7 @@
   <!-- Export bar -->
   <div id="exportBar">
     <span id="exportStat">0 photos tagged</span>
-    <button class="btn btn-primary" id="exportBar2Btn">💾 Save metadata.json</button>
+    <button class="btn btn-ghost" id="viewLogsBtn" disabled>📋 Activity Log</button>
   </div>
 </div>
 
@@ -1217,6 +1254,8 @@ let metadata = {};     // {filename: {people:[], date:'', caption:''}}
 let allPeople = [];    // master list of known names
 let thumbsDirHandle = null; // retained so rename/delete can access the thumbs subfolder
 let kinloreDirHandle = null; // _kinlore/ admin subfolder
+let logsDirHandle   = null; // _kinlore/logs/
+let logFileHandle   = null; // _kinlore/logs/kinlore.log
 let currentPhoto = null;
 let currentTags = [];
 let isDirty = false;
@@ -1233,7 +1272,37 @@ document.getElementById('landingOpenBtn').addEventListener('click', openFolder);
 document.getElementById('exportBtn').addEventListener('click', exportMetadata);
 document.getElementById('generateBtn').addEventListener('click', generateViewer);
 document.getElementById('exportDriveBtn').addEventListener('click', exportToFlashDrive);
-document.getElementById('exportBar2Btn').addEventListener('click', exportMetadata);
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+document.getElementById('viewLogsBtn').addEventListener('click', async () => {
+  const logEl = document.getElementById('logContent');
+  try {
+    if (logFileHandle) {
+      const file = await logFileHandle.getFile();
+      const text = await file.text();
+      logEl.innerHTML = text.split('\n').map(line => {
+        if (line.includes('] ERROR')) return `<span style="color:#e07070">${escapeHtml(line)}</span>`;
+        if (line.includes('] WARN ')) return `<span style="color:#c89040">${escapeHtml(line)}</span>`;
+        return escapeHtml(line);
+      }).join('\n');
+    } else {
+      logEl.textContent = '(No log file — open a folder first)';
+    }
+  } catch (e) {
+    logEl.textContent = 'Could not read log: ' + e.message;
+  }
+  document.getElementById('logModal').classList.add('open');
+  logEl.scrollTop = logEl.scrollHeight;
+});
+
+document.getElementById('logCloseBtn').addEventListener('click', () => {
+  document.getElementById('logModal').classList.remove('open');
+});
+document.getElementById('logModal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) e.currentTarget.classList.remove('open');
+});
 document.getElementById('saveNextBtn').addEventListener('click', saveAndNext);
 document.getElementById('savePhotoBtn').addEventListener('click', saveCurrentPhoto);
 document.getElementById('discardBtn').addEventListener('click', discardChanges);
@@ -1391,7 +1460,7 @@ async function openFolder() {
   try {
     _pendingDirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
   } catch (e) {
-    if (e.name !== 'AbortError') setStatus('Could not open folder: ' + e.message);
+    if (e.name !== 'AbortError') { setStatus('Could not open folder: ' + e.message); appendLog('ERROR', 'Could not open folder: ' + e.message); }
     return;
   }
 
@@ -1452,7 +1521,11 @@ async function loadFolder() {
 
   // Get or create _kinlore admin subdir
   kinloreDirHandle = null;
+  logsDirHandle = null;
+  logFileHandle = null;
   try { kinloreDirHandle = await dirHandle.getDirectoryHandle('_kinlore', { create: true }); } catch {}
+  try { if (kinloreDirHandle) logsDirHandle = await kinloreDirHandle.getDirectoryHandle('logs', { create: true }); } catch {}
+  try { if (logsDirHandle) logFileHandle = await logsDirHandle.getFileHandle('kinlore.log', { create: true }); } catch {}
 
   // Check for thumbs subfolder (_kinlore/thumbs first, fall back to root)
   let thumbsHandle = null;
@@ -1544,12 +1617,15 @@ async function loadFolder() {
   setLoadProgress(null, 0);
   if (!thumbsHandle && photos.length > 0) {
     setStatus(`⚠ No "thumbs" folder — showing originals. Use "Generate Thumbnails" for better performance.`);
+    appendLog('WARN', 'No thumbs folder — showing originals');
   } else {
     setStatus(`Opened: ${dirHandle.name} — ${photos.length} photo(s) found.`);
   }
+  appendLog('INFO', `Opened folder: ${dirHandle.name} (${photos.length} photos, ${Object.keys(metadata).length} tagged)`);
   document.getElementById('exportBtn').disabled = false;
   document.getElementById('generateBtn').disabled = false;
   document.getElementById('exportDriveBtn').disabled = false;
+  document.getElementById('viewLogsBtn').disabled = false;
 }
 
 
@@ -1843,6 +1919,7 @@ function saveCurrentPhoto() {
   isDirty = false;
   exportMetadata(true);
   setStatus(`Saved: ${currentPhoto.name}`);
+  appendLog('INFO', `Saved metadata: ${currentPhoto.name}`);
 
   const s = document.getElementById('saveStatus');
   s.classList.add('show');
@@ -1889,6 +1966,74 @@ function discardChanges() {
     s.textContent = 'Saved ✓';
     s.style.color = '#6aaa6a';
   }, 1800);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// LOGGING
+// ─────────────────────────────────────────────────────────────────
+
+async function rotateLogIfNeeded() {
+  const file = await logFileHandle.getFile();
+  if (file.size < 10 * 1024 * 1024) return;
+  const content = await file.text();
+  const cs = new CompressionStream('gzip');
+  const writer = cs.writable.getWriter();
+  writer.write(new TextEncoder().encode(content));
+  writer.close();
+  const compressed = await new Response(cs.readable).arrayBuffer();
+  const ts = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+  const archiveName = `kinlore.log.${ts}.gz`;
+  const ah = await logsDirHandle.getFileHandle(archiveName, { create: true });
+  const aw = await ah.createWritable();
+  await aw.write(compressed);
+  await aw.close();
+  // Prune: keep only 10 most recent archives
+  const archives = [];
+  for await (const entry of logsDirHandle.values()) {
+    if (entry.name.startsWith('kinlore.log.') && entry.name.endsWith('.gz'))
+      archives.push(entry.name);
+  }
+  archives.sort();
+  while (archives.length > 10) await logsDirHandle.removeEntry(archives.shift());
+  // Clear live log
+  const w = await logFileHandle.createWritable();
+  await w.write('');
+  await w.close();
+  // First line of new log records the rotation
+  const now = new Date();
+  const nowTs = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' +
+    String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' +
+    String(now.getMinutes()).padStart(2,'0') + ':' + String(now.getSeconds()).padStart(2,'0');
+  const rotLine = `[${nowTs}] INFO  Log rotated → ${archiveName}\n`;
+  const ww = await logFileHandle.createWritable({ keepExistingData: true });
+  const f2 = await logFileHandle.getFile();
+  await ww.seek(f2.size);
+  await ww.write(rotLine);
+  await ww.close();
+}
+
+async function appendLog(level, message) {
+  if (!kinloreDirHandle) return;
+  try {
+    if (!logFileHandle) {
+      if (!logsDirHandle) logsDirHandle = await kinloreDirHandle.getDirectoryHandle('logs', { create: true });
+      logFileHandle = await logsDirHandle.getFileHandle('kinlore.log', { create: true });
+    }
+    await rotateLogIfNeeded();
+    const now = new Date();
+    const ts = now.getFullYear() + '-' +
+      String(now.getMonth()+1).padStart(2,'0') + '-' +
+      String(now.getDate()).padStart(2,'0') + ' ' +
+      String(now.getHours()).padStart(2,'0') + ':' +
+      String(now.getMinutes()).padStart(2,'0') + ':' +
+      String(now.getSeconds()).padStart(2,'0');
+    const line = `[${ts}] ${level.padEnd(5)} ${message}\n`;
+    const file = await logFileHandle.getFile();
+    const writable = await logFileHandle.createWritable({ keepExistingData: true });
+    await writable.seek(file.size);
+    await writable.write(line);
+    await writable.close();
+  } catch {} // logging must never crash the app
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -2065,9 +2210,11 @@ async function renamePhoto(photo, newName) {
 
     await exportMetadata(true);
     setStatus(`Renamed to "${newName}"`);
+    appendLog('INFO', `Renamed: ${oldName} → ${newName}`);
     return true;
   } catch (e) {
     alert(`Rename failed: ${e.message}`);
+    appendLog('ERROR', `Rename failed: ${e.message}`);
     return false;
   }
 }
@@ -2115,8 +2262,10 @@ async function deletePhoto() {
     updateExportStat();
     await exportMetadata(true);
     setStatus(`Deleted "${name}"`);
+    appendLog('INFO', `Deleted: ${name}`);
   } catch (e) {
     alert(`Delete failed: ${e.message}`);
+    appendLog('ERROR', `Delete failed: ${e.message}`);
   }
 }
 
@@ -2267,6 +2416,7 @@ async function generateThumbsInBrowser() {
   if (toProcess.length === 0) {
     progressText.textContent = `All ${files.length} thumbnails are up to date.`;
     progressBar.style.width = '100%';
+    appendLog('INFO', `Thumbnails: 0 generated, ${files.length} skipped (all up to date)`);
     await new Promise(r => setTimeout(r, 800));
     return;
   }
@@ -2323,10 +2473,12 @@ async function generateThumbsInBrowser() {
             } catch (e) {
               errors++;
               console.warn('Write failed:', entry.name, e);
+              appendLog('WARN', `Thumbnail write failed: ${entry.name} — ${e.message || e}`);
             }
           } else {
             errors++;
             console.warn('Worker failed:', entry.name, data.error);
+            appendLog('WARN', `Thumbnail worker failed: ${entry.name}`);
           }
           completed++;
           progressText.textContent = `Generating thumbnails… ${completed} of ${toProcess.length} (${WORKER_COUNT} threads)`;
@@ -2359,6 +2511,7 @@ async function generateThumbsInBrowser() {
 
   const errNote = errors > 0 ? ` (${errors} error${errors > 1 ? 's' : ''})` : '';
   progressText.textContent = `Done! Generated ${completed - errors} thumbnail${completed !== 1 ? 's' : ''}${errNote}.`;
+  appendLog('INFO', `Thumbnails: ${completed - errors} generated, ${files.length - toProcess.length} skipped${errNote}`);
   await new Promise(r => setTimeout(r, 600));
 }
 
@@ -2379,7 +2532,10 @@ async function exportMetadata(silent = false) {
     const writable = await metaFileHandle.createWritable();
     await writable.write(blob);
     await writable.close();
-    if (!silent) setStatus(`metadata.json saved to ${dirHandle.name} — ${Object.keys(metadata).length} photo(s) tagged.`);
+    if (!silent) {
+      setStatus(`metadata.json saved to ${dirHandle.name} — ${Object.keys(metadata).length} photo(s) tagged.`);
+      appendLog('INFO', `metadata.json written (${Object.keys(metadata).length} photos tagged)`);
+    }
   } catch (e) {
     if (!silent) {
       // Fallback: trigger browser download
@@ -2388,6 +2544,7 @@ async function exportMetadata(silent = false) {
       a.href = url; a.download = 'metadata.json'; a.click();
       URL.revokeObjectURL(url);
       setStatus('Saved via download (move metadata.json into your photos folder).');
+      appendLog('WARN', 'metadata.json write failed — used browser download');
     }
   }
 }
@@ -2488,6 +2645,7 @@ async function generateViewer() {
     await writable.close();
     showToast(`Viewer saved to ${dirHandle.name} — ready for flash drive!`, 'success', 6000);
     setStatus(`Viewer saved to ${dirHandle.name} — ready for flash drive!`);
+    appendLog('INFO', 'Viewer (index.html) written to folder');
   } catch (e) {
     hideToast();
     // Fallback download
@@ -2497,6 +2655,7 @@ async function generateViewer() {
     URL.revokeObjectURL(url);
     setStatus('index.html downloaded — move it into your photos folder.');
     showToast('index.html downloaded — move it into your photos folder.', 'info', 6000);
+    appendLog('WARN', 'Viewer write failed — used browser download');
   }
 }
 
@@ -2576,10 +2735,12 @@ async function exportToFlashDrive() {
 
     showToast(`Exported to "${destHandle.name}" — ready to hand off!`, 'success', 8000);
     setStatus(`Exported to "${destHandle.name}" — ready to hand off!`);
+    appendLog('INFO', `Exported to drive: ${destHandle.name}`);
   } catch (e) {
     hideToast();
     setStatus(`Export failed: ${e.message}`);
     showToast(`Export failed: ${e.message}`, 'info', 6000);
+    appendLog('ERROR', `Export failed: ${e.message}`);
   }
 }
 
