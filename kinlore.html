@@ -2531,6 +2531,7 @@ function renderBulkTagChips() {
 
 function onBulkTagInput() {
   const bulkTagText = document.getElementById('bulkTagText');
+  document.getElementById('bulkTagInputWrap').classList.remove('field-error');
   const bulkTagSuggestions = document.getElementById('bulkTagSuggestions');
   const val = bulkTagText.value.trim();
   if (val.endsWith(',')) { commitBulkTag(val.slice(0, -1).trim()); return; }
@@ -2587,6 +2588,7 @@ function commitBulkTag(name) {
   if (!name || bulkTags.includes(name)) return;
   bulkTags.push(name);
   if (!allPeople.includes(name)) allPeople.push(name);
+  document.getElementById('bulkTagInputWrap').classList.remove('field-error');
   document.getElementById('bulkTagText').value = '';
   document.getElementById('bulkTagSuggestions').style.display = 'none';
   bulkSuggestIdx = -1;
@@ -2656,6 +2658,12 @@ function updateBulkEditorState() {
 }
 
 function applyBulkEdit() {
+  const bulkTagText = document.getElementById('bulkTagText');
+  if (bulkTagText.value.trim()) {
+    document.getElementById('bulkTagInputWrap').classList.add('field-error');
+    bulkTagText.focus();
+    return;
+  }
   const targets = [...selectedPhotos].map(name => photos.find(p => p.name === name)).filter(Boolean);
   const addPeople = [...bulkTags];
   const yr = document.getElementById('bulkDateYear').value.trim();
