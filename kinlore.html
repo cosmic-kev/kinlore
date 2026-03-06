@@ -81,7 +81,8 @@
     color: var(--paper);
   }
   .btn-accent:hover { background: #6e2a12; }
-  .save-hint { font-size: 0.72rem; opacity: 0.4; color: var(--ink); margin-top: 4px; }
+  .save-hint { font-size: 0.72rem; opacity: 0.4; color: var(--ink); margin-top: 6px; display: grid; grid-template-columns: auto 1fr; gap: 1px 8px; }
+  .hint-key { font-weight: 500; }
   .btn-ghost {
     background: transparent;
     color: var(--paper);
@@ -1194,7 +1195,11 @@
           <button class="btn btn-primary" id="savePhotoBtn">Save</button>
           <button class="btn btn-discard" id="discardBtn">Discard</button>
         </div>
-        <div class="save-hint">Ctrl+Enter to save &amp; advance &nbsp;·&nbsp; Alt+← / Alt+→ to navigate</div>
+        <div class="save-hint">
+          <span class="hint-key">Ctrl+Enter</span><span>save &amp; advance</span>
+          <span class="hint-key">Alt+← / →</span><span>navigate</span>
+          <span class="hint-key">Alt+A</span><span>auto-rename</span>
+        </div>
         <div id="saveStatus">Auto-saved ✓</div>
       </div>
     </div>
@@ -1330,6 +1335,11 @@ document.addEventListener('keydown', e => {
     } else if (e.key === 'ArrowLeft' && idx > 0) {
       if (saveCurrentPhoto() !== false) selectPhoto(filteredPhotos[idx - 1]);
     }
+    return;
+  }
+  if (e.key === 'a' && e.altKey && currentPhoto) {
+    e.preventDefault();
+    document.getElementById('metaRenameBtn').click();
     return;
   }
   if (!currentPhoto) return;
