@@ -1905,6 +1905,8 @@ async function selectPhoto(photo) {
   // Clear any validation error state from previous photo
   document.getElementById('dateMonth').classList.remove('field-error');
   document.getElementById('dateDay').classList.remove('field-error');
+  tagInputWrap.classList.remove('field-error');
+  tagText.value = '';
   const revertBtn = document.getElementById('revertNameBtn');
   revertBtn.disabled = !(metadata[photo.name] || {}).original_name;
 }
@@ -1915,6 +1917,11 @@ function saveCurrentPhoto() {
   const dayEl = document.getElementById('dateDay');
   if (monthEl.classList.contains('field-error') || dayEl.classList.contains('field-error')) {
     (monthEl.classList.contains('field-error') ? monthEl : dayEl).focus();
+    return false;
+  }
+  if (tagText.value.trim()) {
+    tagInputWrap.classList.add('field-error');
+    tagText.focus();
     return false;
   }
   if (!isDirty) return true;
@@ -2304,6 +2311,7 @@ function renderTagChips() {
 }
 
 function onTagInput() {
+  tagInputWrap.classList.remove('field-error');
   const val = tagText.value.trim();
   if (val.endsWith(',')) {
     commitTag(val.slice(0, -1).trim());
@@ -2349,6 +2357,7 @@ function commitTag(name) {
   if (!currentTags.includes(name)) currentTags.push(name);
   if (!allPeople.includes(name)) allPeople.push(name);
   tagText.value = '';
+  tagInputWrap.classList.remove('field-error');
   isDirty = true;
   renderTagChips();
   hideSuggestions();
