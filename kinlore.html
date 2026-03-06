@@ -83,6 +83,7 @@
   .btn-accent:hover { background: #6e2a12; }
   .save-hint { font-size: 0.72rem; opacity: 0.4; color: var(--ink); margin-top: 6px; display: grid; grid-template-columns: auto 1fr; gap: 1px 8px; }
   .hint-key { font-weight: 500; }
+  #filenameButtons button:disabled { opacity: 0.35; cursor: default; }
   .btn-ghost {
     background: transparent;
     color: var(--paper);
@@ -1149,6 +1150,7 @@
             <div id="filenameButtons">
               <button id="renameBtn">Rename</button>
               <button id="metaRenameBtn">Auto-rename</button>
+              <button id="revertNameBtn" disabled>Revert name</button>
               <button id="deleteFileBtn">Delete</button>
             </div>
           </div>
@@ -1821,6 +1823,8 @@ async function selectPhoto(photo) {
   // Clear any validation error state from previous photo
   document.getElementById('dateMonth').classList.remove('field-error');
   document.getElementById('dateDay').classList.remove('field-error');
+  const revertBtn = document.getElementById('revertNameBtn');
+  revertBtn.disabled = !(metadata[photo.name] || {}).original_name;
 }
 
 function saveCurrentPhoto() {
@@ -1831,11 +1835,13 @@ function saveCurrentPhoto() {
     (monthEl.classList.contains('field-error') ? monthEl : dayEl).focus();
     return false;
   }
+  const _origName = metadata[currentPhoto.name]?.original_name;
   metadata[currentPhoto.name] = {
     people: [...currentTags],
     date: buildPartialDate(),
     caption: document.getElementById('captionInput').value.trim()
   };
+  if (_origName) metadata[currentPhoto.name].original_name = _origName;
 
   rebuildPeopleList();
   applyFilters();
@@ -1918,6 +1924,21 @@ function generatePhotoName(photo, meta) {
   return base + ext;
 }
 
+document.getElementById('revertNameBtn').addEventListener('click', async () => {
+  if (!currentPhoto) return;
+  const origName = metadata[currentPhoto.name]?.original_name;
+  if (!origName) return;
+  if (!confirm(
+    `Revert filename to its original name?\n\nFrom: "${currentPhoto.name}"\nTo:   "${origName}"\n\nThe file, thumbnail, and metadata will all be updated.`
+  )) return;
+  const success = await renamePhoto(currentPhoto, origName);
+  if (success) {
+    if (metadata[currentPhoto.name]) delete metadata[currentPhoto.name].original_name;
+    await exportMetadata(true);
+    document.getElementById('revertNameBtn').disabled = true;
+  }
+});
+
 document.getElementById('metaRenameBtn').addEventListener('click', async () => {
   if (!currentPhoto) return;
   const meta = metadata[currentPhoto.name] || {};
@@ -1936,7 +1957,8 @@ document.getElementById('metaRenameBtn').addEventListener('click', async () => {
     `To:   "${newName}"\n\n` +
     `The original file, thumbnail, and metadata will all be updated.`
   )) return;
-  await renamePhoto(currentPhoto, newName);
+  const ok = await renamePhoto(currentPhoto, newName);
+  if (ok) document.getElementById('revertNameBtn').disabled = false;
 });
 
 function cancelRename() {
@@ -1962,7 +1984,10 @@ async function confirmRename() {
   const ok = await renamePhoto(currentPhoto, newName);
   btn.disabled = false;
   btn.textContent = 'Rename';
-  if (ok) cancelRename();
+  if (ok) {
+    cancelRename();
+    document.getElementById('revertNameBtn').disabled = false;
+  }
 }
 
 async function renamePhoto(photo, newName) {
@@ -2006,6 +2031,9 @@ async function renamePhoto(photo, newName) {
     if (metadata[oldName]) {
       metadata[newName] = metadata[oldName];
       delete metadata[oldName];
+      if (!metadata[newName].original_name) metadata[newName].original_name = oldName;
+    } else {
+      metadata[newName] = { people: [], date: '', caption: '', original_name: oldName };
     }
 
     // Update the photo object in-place
