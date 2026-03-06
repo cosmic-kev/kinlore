@@ -1587,8 +1587,13 @@ function showApp() {
   app.classList.add('visible');
 }
 
+let _statusTimer = null;
 function setStatus(msg) {
   document.getElementById('statusText').textContent = msg;
+  clearTimeout(_statusTimer);
+  _statusTimer = setTimeout(() => {
+    document.getElementById('statusText').textContent = '';
+  }, 15000);
 }
 
 let _toastTimer = null;
