@@ -907,21 +907,22 @@
     justify-content: center;
   }
   #logModal.open { display: flex; }
-  .log-modal-box { width: min(820px, 94vw); max-height: 86vh; display: flex; flex-direction: column; }
+  .log-modal-box { width: min(1100px, 96vw) !important; max-width: none !important; max-height: 92vh; display: flex; flex-direction: column; }
+  .log-modal-title { font-family: var(--ui-font); font-size: 0.8rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-light); margin-bottom: 10px; }
   #logContent {
     flex: 1;
     overflow-y: auto;
-    font-size: 0.72rem;
+    font-size: 0.76rem;
     font-family: monospace;
     white-space: pre-wrap;
     word-break: break-all;
     background: #1a1008;
     color: #c8b89a;
-    padding: 12px 14px;
+    padding: 14px 16px;
     border-radius: var(--radius-sm);
-    min-height: 120px;
-    max-height: calc(86vh - 120px);
-    line-height: 1.6;
+    min-height: 200px;
+    max-height: calc(92vh - 110px);
+    line-height: 1.65;
   }
   .modal-box {
     background: var(--paper);
@@ -1114,7 +1115,7 @@
 <!-- Log viewer modal -->
 <div id="logModal">
   <div class="modal-box log-modal-box">
-    <h3>Activity Log</h3>
+    <div class="log-modal-title">Activity Log</div>
     <pre id="logContent"></pre>
     <div class="modal-actions">
       <button class="btn btn-ghost" id="logCloseBtn">Close</button>
