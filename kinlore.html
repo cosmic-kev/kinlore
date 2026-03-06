@@ -1933,11 +1933,25 @@ document.getElementById('revertNameBtn').addEventListener('click', async () => {
 document.getElementById('metaRenameBtn').addEventListener('click', async () => {
   if (!currentPhoto) return;
   const meta = metadata[currentPhoto.name] || {};
-  const newName = generatePhotoName(currentPhoto, meta);
+  let newName = generatePhotoName(currentPhoto, meta);
   if (!newName) {
     alert('No metadata to generate a name from. Add people, a date, or a caption first.');
     return;
   }
+
+  // Deduplicate: if name is taken by another photo, append _2, _3, ...
+  const existingNames = new Set(photos.map(p => p.name));
+  if (existingNames.has(newName) && newName !== currentPhoto.name) {
+    const dotIdx = newName.lastIndexOf('.');
+    const base = dotIdx !== -1 ? newName.slice(0, dotIdx) : newName;
+    const ext  = dotIdx !== -1 ? newName.slice(dotIdx) : '';
+    let n = 2;
+    do {
+      const suffix = `_${n++}`;
+      newName = base.slice(0, 100 - suffix.length) + suffix + ext;
+    } while (existingNames.has(newName) && n <= 999);
+  }
+
   if (newName === currentPhoto.name) {
     alert('This file is already correctly named.');
     return;
