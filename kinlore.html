@@ -1188,7 +1188,7 @@
           <span class="hint-key">Alt+← / →</span><span>navigate</span>
           <span class="hint-key">Alt+A</span><span>auto-rename</span>
         </div>
-        <div id="saveStatus">Auto-saved ✓</div>
+        <div id="saveStatus">Saved ✓</div>
       </div>
     </div>
   </div>
@@ -1826,6 +1826,8 @@ function saveCurrentPhoto() {
     (monthEl.classList.contains('field-error') ? monthEl : dayEl).focus();
     return false;
   }
+  if (!isDirty) return true;
+
   const _origName = metadata[currentPhoto.name]?.original_name;
   metadata[currentPhoto.name] = {
     people: [...currentTags],
@@ -1839,8 +1841,8 @@ function saveCurrentPhoto() {
   updateExportStat();
 
   isDirty = false;
-  // Auto-save metadata.json to disk
   exportMetadata(true);
+  setStatus(`Saved: ${currentPhoto.name}`);
 
   const s = document.getElementById('saveStatus');
   s.classList.add('show');
@@ -1884,7 +1886,7 @@ function discardChanges() {
   s.classList.add('show');
   setTimeout(() => {
     s.classList.remove('show');
-    s.textContent = 'Auto-saved ✓';
+    s.textContent = 'Saved ✓';
     s.style.color = '#6aaa6a';
   }, 1800);
 }
