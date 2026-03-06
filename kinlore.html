@@ -306,10 +306,11 @@
     word-break: break-all;
   }
   #filenameButtons {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
     gap: 6px;
   }
-  #renameBtn {
+  #renameBtn, #metaRenameBtn, #revertNameBtn {
     background: transparent;
     border: 1px solid rgba(139,109,80,0.45);
     color: var(--ink-light);
@@ -317,11 +318,10 @@
     padding: 3px 9px;
     border-radius: var(--radius-sm);
     cursor: pointer;
-    flex-shrink: 0;
     font-family: var(--ui-font);
     transition: background 0.15s, color 0.15s;
   }
-  #renameBtn:hover { background: var(--paper-dark); border-color: var(--sepia); color: var(--ink); }
+  #renameBtn:hover, #metaRenameBtn:hover, #revertNameBtn:hover { background: var(--paper-dark); border-color: var(--sepia); color: var(--ink); }
   #deleteFileBtn {
     background: transparent;
     border: 1px solid rgba(192,112,112,0.5);
@@ -330,24 +330,10 @@
     padding: 3px 9px;
     border-radius: var(--radius-sm);
     cursor: pointer;
-    flex-shrink: 0;
     font-family: var(--ui-font);
     transition: background 0.15s, color 0.15s;
   }
   #deleteFileBtn:hover { background: #fef2f2; border-color: #a05050; color: #7a2020; }
-  #metaRenameBtn {
-    background: transparent;
-    border: 1px solid rgba(139,109,80,0.45);
-    color: var(--ink-light);
-    font-size: 0.72rem;
-    padding: 3px 9px;
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    flex-shrink: 0;
-    font-family: var(--ui-font);
-    transition: background 0.15s, color 0.15s;
-  }
-  #metaRenameBtn:hover { background: var(--paper-dark); border-color: var(--sepia); color: var(--ink); }
   #renameRow {
     display: none;
     align-items: center;
