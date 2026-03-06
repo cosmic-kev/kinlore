@@ -2461,8 +2461,9 @@ async function generateThumbsInBrowser() {
   `;
   const workerUrl = URL.createObjectURL(new Blob([workerSrc], { type: 'text/javascript' }));
 
-  // Use up to 8 workers — enough to saturate most machines, avoids memory pressure
-  const WORKER_COUNT = Math.min(8, navigator.hardwareConcurrency || 4);
+  // Scale workers to ~75% of logical cores — leaves headroom for UI thread and OS
+  const cores = navigator.hardwareConcurrency || 4;
+  const WORKER_COUNT = Math.max(1, Math.floor(cores * 0.75));
   progressText.textContent = `Starting ${WORKER_COUNT} parallel workers…`;
 
   // Create worker pool
