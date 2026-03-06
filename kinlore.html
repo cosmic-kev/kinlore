@@ -1454,6 +1454,12 @@ document.getElementById('modalOpenBtn').addEventListener('click', async () => {
 
   dirHandle = _pendingDirHandle;
 
+  // Init log handles early so thumbnail generation (below) can be logged
+  kinloreDirHandle = null; logsDirHandle = null; logFileHandle = null;
+  try { kinloreDirHandle = await dirHandle.getDirectoryHandle('_kinlore', { create: true }); } catch {}
+  try { if (kinloreDirHandle) logsDirHandle = await kinloreDirHandle.getDirectoryHandle('logs', { create: true }); } catch {}
+  try { if (logsDirHandle) logFileHandle = await logsDirHandle.getFileHandle('kinlore.log', { create: true }); } catch {}
+
   if (doThumbs) {
     document.getElementById('thumbProgress').style.display = 'block';
     await generateThumbsInBrowser();
