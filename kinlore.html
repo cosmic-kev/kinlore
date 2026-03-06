@@ -695,7 +695,7 @@
     opacity: 0.6;
   }
   .tag-chip button:hover { opacity: 1; }
-  #tagText {
+  #tagText, #bulkTagText {
     border: none;
     outline: none;
     background: transparent;
@@ -705,7 +705,7 @@
     flex: 1;
     min-width: 80px;
   }
-  #tagSuggestions {
+  #tagSuggestions, #bulkTagSuggestions {
     display: none;
     position: absolute;
     top: calc(100% + 6px);
@@ -757,7 +757,7 @@
   #dateDay   { flex: 1; min-width: 0; }
 
   /* Caption */
-  #captionInput {
+  #captionInput, #bulkCaptionInput {
     font-family: var(--ui-font);
     font-size: 0.85rem;
     padding: 9px 12px;
@@ -771,7 +771,7 @@
     line-height: 1.6;
     transition: border-color 0.15s, box-shadow 0.15s;
   }
-  #captionInput:focus {
+  #captionInput:focus, #bulkCaptionInput:focus {
     outline: none;
     border-color: var(--sepia);
     box-shadow: 0 0 0 3px rgba(200,146,78,0.15);
@@ -790,6 +790,39 @@
     border: 1px solid rgba(192,112,112,0.5);
   }
   .btn-discard:hover { background: #fef2f2; border-color: #a05050; }
+
+  /* ── Bulk Select Mode ── */
+  #selectModeBtn.active {
+    background: var(--sepia);
+    color: var(--paper);
+    border-color: var(--sepia);
+  }
+  .bulk-checkbox {
+    position: absolute; top: 6px; left: 6px;
+    width: 20px; height: 20px; border-radius: 4px;
+    border: 2px solid rgba(255,255,255,0.85);
+    background: rgba(0,0,0,0.35);
+    z-index: 2; pointer-events: none;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .bulk-checkbox.checked { background: var(--sepia); border-color: var(--sepia); }
+  .bulk-checkbox.checked::after { content: '✓'; color: white; font-size: 13px; font-weight: 700; line-height: 1; }
+  .photo-card.bulk-selected { outline: 2.5px solid var(--sepia); outline-offset: 2px; }
+  #bulkEditorContent { display: none; flex-direction: column; gap: 18px; }
+  .bulk-count-text {
+    font-family: var(--ui-font);
+    font-size: 0.75rem; font-weight: 600;
+    letter-spacing: 0.07em; text-transform: uppercase;
+    color: var(--ink-light);
+  }
+  /* Conflict modal */
+  #bulkConflictModal { display: none; position: fixed; inset: 0; background: rgba(20,12,5,0.85); z-index: 300; align-items: center; justify-content: center; }
+  #bulkConflictModal.open { display: flex; }
+  .conflict-field { margin: 14px 0; }
+  .conflict-field p { font-size: 0.84rem; color: var(--ink-light); margin-bottom: 8px; }
+  .conflict-field p strong { color: var(--ink); }
+  .conflict-field label { display: flex; align-items: center; gap: 8px; font-size: 0.84rem; color: var(--ink); cursor: pointer; margin-bottom: 4px; }
+  .conflict-field input[type=radio] { accent-color: var(--accent); }
   #saveStatus {
     font-size: 0.75rem;
     color: #6aaa6a;
@@ -1151,6 +1184,7 @@
             <option value="tagged">Tagged only</option>
             <option value="untagged">Untagged only</option>
           </select>
+          <button class="btn btn-ghost" id="selectModeBtn" disabled>Select</button>
           <span class="grid-stat" id="gridStat"></span>
         </div>
         <div id="photoGrid">
@@ -1228,6 +1262,43 @@
         </div>
         <div id="saveStatus">Saved ✓</div>
       </div>
+
+      <!-- Bulk editor (shown in select mode) -->
+      <div id="bulkEditorContent">
+        <div>
+          <div class="bulk-count-text" id="bulkEditorCount">Select photos from the grid</div>
+        </div>
+        <!-- People (append-only) -->
+        <div>
+          <label class="field-label">Add people to all selected</label>
+          <div class="tag-input-wrap" id="bulkTagInputWrap">
+            <input id="bulkTagText" type="text" placeholder="Type a name…" autocomplete="off" />
+            <div id="bulkTagSuggestions"></div>
+          </div>
+          <div style="font-size:0.72rem;color:var(--faded);margin-top:5px;">Added names are appended — existing tags are never removed.</div>
+        </div>
+        <!-- Date -->
+        <div>
+          <label class="field-label">Set date</label>
+          <div class="date-fields">
+            <input id="bulkDateYear"  type="number" placeholder="Year"  min="1800" max="2099" />
+            <input id="bulkDateMonth" type="number" placeholder="Month" min="1" max="12" />
+            <input id="bulkDateDay"   type="number" placeholder="Day"   min="1" max="31" />
+          </div>
+          <div style="font-size:0.73rem;color:var(--faded);margin-top:4px;font-style:italic;">Leave blank to keep each photo's existing date.</div>
+        </div>
+        <!-- Caption -->
+        <div>
+          <label class="field-label">Set caption</label>
+          <textarea id="bulkCaptionInput" placeholder="Caption for all selected photos…"></textarea>
+          <div style="font-size:0.73rem;color:var(--faded);margin-top:4px;font-style:italic;">Leave blank to keep each photo's existing caption.</div>
+        </div>
+        <!-- Actions -->
+        <div class="save-row">
+          <button class="btn btn-accent" id="bulkApplyBtn" disabled>Apply to 0 photos</button>
+          <button class="btn btn-ghost"  id="bulkCancelBtn">Cancel</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1235,6 +1306,18 @@
   <div id="exportBar">
     <span id="exportStat">0 photos tagged</span>
     <button class="btn btn-ghost" id="viewLogsBtn" disabled>📋 Activity Log</button>
+  </div>
+</div>
+
+<!-- Bulk conflict modal -->
+<div id="bulkConflictModal">
+  <div class="modal-box" style="max-width:440px">
+    <h3>Overwrite existing data?</h3>
+    <div id="bulkConflictFields"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost"   id="bulkConflictCancelBtn">Cancel</button>
+      <button class="btn btn-primary" id="bulkConflictApplyBtn">Apply</button>
+    </div>
   </div>
 </div>
 
@@ -1264,6 +1347,11 @@ let filteredPhotos = [];
 let selectedPeople = new Set();
 let suggestIdx = -1;
 let metaFileHandle = null;
+let bulkSelectMode = false;
+let selectedPhotos = new Set();
+let bulkTags = [];
+let lastBulkClickedName = null;
+let bulkSuggestIdx = -1;
 
 // ─────────────────────────────────────────────────────────────────
 // INIT
@@ -1304,6 +1392,19 @@ document.getElementById('logCloseBtn').addEventListener('click', () => {
 document.getElementById('logModal').addEventListener('click', e => {
   if (e.target === e.currentTarget) e.currentTarget.classList.remove('open');
 });
+document.getElementById('selectModeBtn').addEventListener('click', () => {
+  bulkSelectMode ? exitSelectMode() : enterSelectMode();
+});
+document.getElementById('bulkApplyBtn').addEventListener('click', applyBulkEdit);
+document.getElementById('bulkCancelBtn').addEventListener('click', exitSelectMode);
+document.getElementById('bulkConflictCancelBtn').addEventListener('click', () => {
+  document.getElementById('bulkConflictModal').classList.remove('open');
+});
+document.getElementById('bulkTagText').addEventListener('input', onBulkTagInput);
+document.getElementById('bulkTagText').addEventListener('keydown', onBulkTagKeydown);
+document.getElementById('bulkTagText').addEventListener('blur', () => setTimeout(() => { document.getElementById('bulkTagSuggestions').style.display = 'none'; }, 150));
+document.getElementById('bulkTagInputWrap').addEventListener('click', () => document.getElementById('bulkTagText').focus());
+
 document.getElementById('saveNextBtn').addEventListener('click', saveAndNext);
 document.getElementById('savePhotoBtn').addEventListener('click', saveCurrentPhoto);
 document.getElementById('discardBtn').addEventListener('click', discardChanges);
@@ -1379,6 +1480,18 @@ document.getElementById('captionInput').addEventListener('input', markDirty);
 
 // Keyboard navigation in edit view
 document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && bulkSelectMode) { exitSelectMode(); return; }
+  if (bulkSelectMode && !e.ctrlKey && !e.altKey && !e.metaKey && e.key.length === 1) {
+    const activeTag = document.activeElement?.tagName;
+    if (activeTag !== 'INPUT' && activeTag !== 'TEXTAREA' && activeTag !== 'SELECT') {
+      const bulkTagText = document.getElementById('bulkTagText');
+      bulkTagText.focus();
+      bulkTagText.value += e.key;
+      bulkTagText.dispatchEvent(new Event('input', { bubbles: true }));
+      e.preventDefault();
+      return;
+    }
+  }
   if (e.key === 'Enter' && e.ctrlKey && currentPhoto) {
     e.preventDefault();
     if (saveAndNext()) setTimeout(() => document.getElementById('tagText')?.focus(), 0);
@@ -1641,6 +1754,7 @@ async function loadFolder() {
   document.getElementById('generateBtn').disabled = false;
   document.getElementById('exportDriveBtn').disabled = false;
   document.getElementById('viewLogsBtn').disabled = false;
+  document.getElementById('selectModeBtn').disabled = false;
 }
 
 
@@ -1730,19 +1844,32 @@ function renderGrid(list) {
     const tagged = (meta.people?.length > 0) || meta.date || meta.caption;
 
     const card = document.createElement('div');
-    card.className = 'photo-card' + (currentPhoto?.name === photo.name ? ' selected' : '');
     card.dataset.name = photo.name;
 
-    card.innerHTML = `
-      <img src="${photo.thumbUrl}" alt="${photo.name}" loading="lazy" />
-      ${tagged ? '<div class="tagged-indicator" title="Tagged"></div>' : ''}
-      <div class="photo-card-meta">
-        <div class="photo-card-name">${photo.name}</div>
-        <div class="photo-card-tags">${(meta.people||[]).map(p=>`<span class="tag-pill">${p}</span>`).join('')}</div>
-        ${meta.date ? `<div class="photo-card-date">${formatDate(meta.date)}</div>` : ''}
-      </div>`;
-
-    card.addEventListener('click', () => selectPhoto(photo));
+    if (bulkSelectMode) {
+      card.className = 'photo-card' + (selectedPhotos.has(photo.name) ? ' bulk-selected' : '');
+      card.innerHTML = `
+        <img src="${photo.thumbUrl}" alt="${photo.name}" loading="lazy" />
+        ${tagged ? '<div class="tagged-indicator" title="Tagged"></div>' : ''}
+        <div class="bulk-checkbox${selectedPhotos.has(photo.name) ? ' checked' : ''}"></div>
+        <div class="photo-card-meta">
+          <div class="photo-card-name">${photo.name}</div>
+          <div class="photo-card-tags">${(meta.people||[]).map(p=>`<span class="tag-pill">${p}</span>`).join('')}</div>
+          ${meta.date ? `<div class="photo-card-date">${formatDate(meta.date)}</div>` : ''}
+        </div>`;
+      card.addEventListener('click', e => toggleBulkSelect(photo, e.shiftKey));
+    } else {
+      card.className = 'photo-card' + (currentPhoto?.name === photo.name ? ' selected' : '');
+      card.innerHTML = `
+        <img src="${photo.thumbUrl}" alt="${photo.name}" loading="lazy" />
+        ${tagged ? '<div class="tagged-indicator" title="Tagged"></div>' : ''}
+        <div class="photo-card-meta">
+          <div class="photo-card-name">${photo.name}</div>
+          <div class="photo-card-tags">${(meta.people||[]).map(p=>`<span class="tag-pill">${p}</span>`).join('')}</div>
+          ${meta.date ? `<div class="photo-card-date">${formatDate(meta.date)}</div>` : ''}
+        </div>`;
+      card.addEventListener('click', () => selectPhoto(photo));
+    }
     grid.appendChild(card);
   });
 
@@ -2383,6 +2510,225 @@ function moveSuggest(dir) {
   items[suggestIdx]?.classList.remove('active');
   suggestIdx = Math.max(0, Math.min(items.length - 1, suggestIdx + dir));
   items[suggestIdx].classList.add('active');
+}
+
+// ── Bulk tag input (mirrors single-photo tag input) ──
+function renderBulkTagChips() {
+  const wrap = document.getElementById('bulkTagInputWrap');
+  const input = document.getElementById('bulkTagText');
+  wrap.querySelectorAll('.tag-chip').forEach(c => c.remove());
+  bulkTags.forEach(name => {
+    const chip = document.createElement('div');
+    chip.className = 'tag-chip';
+    chip.innerHTML = `${name} <span class="tag-chip-x">×</span>`;
+    chip.querySelector('.tag-chip-x').addEventListener('click', () => {
+      bulkTags = bulkTags.filter(t => t !== name);
+      renderBulkTagChips();
+    });
+    wrap.insertBefore(chip, input);
+  });
+}
+
+function onBulkTagInput() {
+  const bulkTagText = document.getElementById('bulkTagText');
+  const bulkTagSuggestions = document.getElementById('bulkTagSuggestions');
+  const val = bulkTagText.value.trim();
+  if (val.endsWith(',')) { commitBulkTag(val.slice(0, -1).trim()); return; }
+  if (!val) { bulkTagSuggestions.style.display = 'none'; return; }
+  const lower = val.toLowerCase();
+  const matches = allPeople.filter(p => p.toLowerCase().startsWith(lower) && !bulkTags.includes(p));
+  if (matches.length) {
+    bulkSuggestIdx = -1;
+    bulkTagSuggestions.innerHTML = matches.map(n => `<div class="suggestion-item">${n}</div>`).join('');
+    bulkTagSuggestions.querySelectorAll('.suggestion-item').forEach(el => {
+      el.addEventListener('mousedown', () => commitBulkTag(el.textContent));
+    });
+    bulkTagSuggestions.style.display = 'block';
+  } else {
+    bulkTagSuggestions.style.display = 'none';
+  }
+}
+
+function onBulkTagKeydown(e) {
+  const bulkTagText = document.getElementById('bulkTagText');
+  const bulkTagSuggestions = document.getElementById('bulkTagSuggestions');
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    if (bulkSuggestIdx >= 0) {
+      const items = bulkTagSuggestions.querySelectorAll('.suggestion-item');
+      if (items[bulkSuggestIdx]) commitBulkTag(items[bulkSuggestIdx].textContent);
+    } else {
+      commitBulkTag(bulkTagText.value.trim());
+    }
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    const items = bulkTagSuggestions.querySelectorAll('.suggestion-item');
+    if (!items.length) return;
+    items[bulkSuggestIdx]?.classList.remove('active');
+    bulkSuggestIdx = Math.min(items.length - 1, bulkSuggestIdx + 1);
+    items[bulkSuggestIdx].classList.add('active');
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    const items = bulkTagSuggestions.querySelectorAll('.suggestion-item');
+    if (!items.length) return;
+    items[bulkSuggestIdx]?.classList.remove('active');
+    bulkSuggestIdx = Math.max(0, bulkSuggestIdx - 1);
+    items[bulkSuggestIdx].classList.add('active');
+  } else if (e.key === 'Backspace' && bulkTagText.value === '' && bulkTags.length) {
+    bulkTags.pop();
+    renderBulkTagChips();
+  } else if (e.key === 'Escape') {
+    bulkTagSuggestions.style.display = 'none';
+  }
+}
+
+function commitBulkTag(name) {
+  name = name.trim();
+  if (!name || bulkTags.includes(name)) return;
+  bulkTags.push(name);
+  if (!allPeople.includes(name)) allPeople.push(name);
+  document.getElementById('bulkTagText').value = '';
+  document.getElementById('bulkTagSuggestions').style.display = 'none';
+  bulkSuggestIdx = -1;
+  renderBulkTagChips();
+}
+
+// ─────────────────────────────────────────────────────────────────
+// BULK SELECT
+// ─────────────────────────────────────────────────────────────────
+function enterSelectMode() {
+  if (currentPhoto) closePreview();
+  bulkSelectMode = true;
+  selectedPhotos.clear();
+  bulkTags = [];
+  lastBulkClickedName = null;
+  document.getElementById('selectModeBtn').classList.add('active');
+  document.getElementById('editorPlaceholder').style.display = 'none';
+  document.getElementById('editorContent').style.display = 'none';
+  document.getElementById('bulkEditorContent').style.display = 'flex';
+  renderGrid(filteredPhotos);
+  updateBulkEditorState();
+}
+
+function exitSelectMode() {
+  bulkSelectMode = false;
+  selectedPhotos.clear();
+  bulkTags = [];
+  const btn = document.getElementById('selectModeBtn');
+  btn.classList.remove('active');
+  btn.textContent = 'Select';
+  document.getElementById('bulkEditorContent').style.display = 'none';
+  document.getElementById('editorPlaceholder').style.display = '';
+  ['bulkTagText','bulkDateYear','bulkDateMonth','bulkDateDay','bulkCaptionInput']
+    .forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('bulkTagInputWrap').querySelectorAll('.tag-chip').forEach(c => c.remove());
+  document.getElementById('bulkTagSuggestions').style.display = 'none';
+  renderGrid(filteredPhotos);
+}
+
+function toggleBulkSelect(photo, shiftKey) {
+  if (shiftKey && lastBulkClickedName) {
+    const aIdx = filteredPhotos.findIndex(p => p.name === lastBulkClickedName);
+    const bIdx = filteredPhotos.findIndex(p => p.name === photo.name);
+    const [lo, hi] = [Math.min(aIdx, bIdx), Math.max(aIdx, bIdx)];
+    for (let i = lo; i <= hi; i++) selectedPhotos.add(filteredPhotos[i].name);
+  } else {
+    if (selectedPhotos.has(photo.name)) selectedPhotos.delete(photo.name);
+    else selectedPhotos.add(photo.name);
+    lastBulkClickedName = photo.name;
+  }
+  document.querySelectorAll('.photo-card').forEach(c => {
+    const sel = selectedPhotos.has(c.dataset.name);
+    c.classList.toggle('bulk-selected', sel);
+    const cb = c.querySelector('.bulk-checkbox');
+    if (cb) cb.classList.toggle('checked', sel);
+  });
+  updateBulkEditorState();
+}
+
+function updateBulkEditorState() {
+  const n = selectedPhotos.size;
+  document.getElementById('bulkEditorCount').textContent =
+    n === 0 ? 'Select photos from the grid' : `${n} photo${n !== 1 ? 's' : ''} selected`;
+  document.getElementById('bulkApplyBtn').textContent = `Apply to ${n} photo${n !== 1 ? 's' : ''}`;
+  document.getElementById('bulkApplyBtn').disabled = n === 0;
+  document.getElementById('selectModeBtn').textContent = n > 0 ? `Select · ${n}` : 'Select';
+}
+
+function applyBulkEdit() {
+  const targets = [...selectedPhotos].map(name => photos.find(p => p.name === name)).filter(Boolean);
+  const addPeople = [...bulkTags];
+  const yr = document.getElementById('bulkDateYear').value.trim();
+  const mo = document.getElementById('bulkDateMonth').value.trim();
+  const dy = document.getElementById('bulkDateDay').value.trim();
+  const date = yr ? (mo ? (dy ? `${yr}-${mo.padStart(2,'0')}-${dy.padStart(2,'0')}` : `${yr}-${mo.padStart(2,'0')}`) : yr) : '';
+  const caption = document.getElementById('bulkCaptionInput').value.trim();
+
+  const conflicts = {};
+  if (date) {
+    const n = targets.filter(p => metadata[p.name]?.date).length;
+    if (n > 0) conflicts.date = { count: n, total: targets.length };
+  }
+  if (caption) {
+    const n = targets.filter(p => metadata[p.name]?.caption).length;
+    if (n > 0) conflicts.caption = { count: n, total: targets.length };
+  }
+
+  if (Object.keys(conflicts).length > 0) {
+    showBulkConflictModal(conflicts, targets, addPeople, date, caption);
+    return;
+  }
+  executeBulkApply(targets, addPeople, date, true, caption, true);
+}
+
+function showBulkConflictModal(conflicts, targets, addPeople, date, caption) {
+  const fieldsEl = document.getElementById('bulkConflictFields');
+  fieldsEl.innerHTML = '';
+
+  if (conflicts.date) {
+    fieldsEl.innerHTML += `<div class="conflict-field">
+      <p><strong>Date:</strong> ${conflicts.date.count} of ${conflicts.date.total} selected photos already have a date.</p>
+      <label><input type="radio" name="conflictDate" value="overwrite" checked> Overwrite existing dates</label>
+      <label><input type="radio" name="conflictDate" value="blanks"> Only apply to photos without a date</label>
+    </div>`;
+  }
+  if (conflicts.caption) {
+    fieldsEl.innerHTML += `<div class="conflict-field">
+      <p><strong>Caption:</strong> ${conflicts.caption.count} of ${conflicts.caption.total} selected photos already have a caption.</p>
+      <label><input type="radio" name="conflictCaption" value="overwrite" checked> Overwrite existing captions</label>
+      <label><input type="radio" name="conflictCaption" value="blanks"> Only apply to photos without a caption</label>
+    </div>`;
+  }
+
+  const applyBtn = document.getElementById('bulkConflictApplyBtn');
+  const newApplyBtn = applyBtn.cloneNode(true);
+  applyBtn.parentNode.replaceChild(newApplyBtn, applyBtn);
+  newApplyBtn.addEventListener('click', () => {
+    const overwriteDate    = !conflicts.date    || document.querySelector('input[name="conflictDate"]:checked')?.value === 'overwrite';
+    const overwriteCaption = !conflicts.caption || document.querySelector('input[name="conflictCaption"]:checked')?.value === 'overwrite';
+    document.getElementById('bulkConflictModal').classList.remove('open');
+    executeBulkApply(targets, addPeople, date, overwriteDate, caption, overwriteCaption);
+  });
+
+  document.getElementById('bulkConflictModal').classList.add('open');
+}
+
+function executeBulkApply(targets, addPeople, date, overwriteDate, caption, overwriteCaption) {
+  targets.forEach(photo => {
+    const ex = metadata[photo.name] || {};
+    metadata[photo.name] = {
+      ...ex,
+      people: [...new Set([...(ex.people || []), ...addPeople])],
+      date: date ? (overwriteDate || !ex.date ? date : ex.date) : (ex.date || ''),
+      caption: caption ? (overwriteCaption || !ex.caption ? caption : ex.caption) : (ex.caption || '')
+    };
+  });
+  rebuildPeopleList();
+  applyFilters();
+  exportMetadata(true);
+  setStatus(`Bulk edit applied to ${targets.length} photo${targets.length !== 1 ? 's' : ''}`);
+  appendLog('INFO', `Bulk edit: ${targets.length} photos — added people: [${addPeople.join(', ')}]`);
+  exitSelectMode();
 }
 
 // ─────────────────────────────────────────────────────────────────
