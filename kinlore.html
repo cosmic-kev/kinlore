@@ -227,8 +227,14 @@
     filter: sepia(8%) contrast(1.04);
     display: block;
     transition: opacity 0.15s;
+    transform-origin: center center;
+    cursor: zoom-in;
+    user-select: none;
+    -webkit-user-drag: none;
   }
   #fullPreviewImg.loading { opacity: 0; }
+  #fullPreviewImg.pv-zoomed { cursor: grab; }
+  #fullPreviewImg.pv-dragging { cursor: grabbing; }
   #previewSpinner {
     position: absolute;
     top: 50%; left: 50%;
@@ -860,6 +866,22 @@
     border-radius: 2px;
     box-shadow: 0 0 60px rgba(0,0,0,0.7);
     filter: sepia(8%) contrast(1.04);
+    transform-origin: center center;
+    cursor: zoom-in;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+  #lightboxImg.lb-zoomed { cursor: grab; }
+  #lightboxImg.lb-dragging { cursor: grabbing; }
+  #lightboxZoomHint {
+    position: absolute;
+    bottom: 70px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.72rem;
+    color: rgba(248,240,227,0.4);
+    pointer-events: none;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
   }
   #lightboxClose {
     position: absolute;
@@ -1259,6 +1281,8 @@
           <span class="hint-key">Ctrl+Enter</span><span>save &amp; advance</span>
           <span class="hint-key">Alt+← / →</span><span>navigate</span>
           <span class="hint-key">Alt+A</span><span>auto-rename</span>
+          <span class="hint-key">Click photo</span><span>zoom in / out</span>
+          <span class="hint-key">Scroll</span><span>adjust zoom level</span>
         </div>
         <div id="saveStatus">Saved ✓</div>
       </div>
@@ -1326,6 +1350,7 @@
   <button id="lightboxClose">✕</button>
   <img id="lightboxImg" src="" alt="" />
   <div id="lightboxCaption"></div>
+  <div id="lightboxZoomHint">Click to zoom · Scroll to adjust · Click to zoom out</div>
 </div>
 
 <script>
@@ -1352,6 +1377,24 @@ let selectedPhotos = new Set();
 let bulkTags = [];
 let lastBulkClickedName = null;
 let bulkSuggestIdx = -1;
+let lbScale = 1;
+let lbOffsetX = 0;
+let lbOffsetY = 0;
+let lbDragActive = false;
+let lbDragMoved = false;
+let lbDragStartX = 0;
+let lbDragStartY = 0;
+let lbDragOriginX = 0;
+let lbDragOriginY = 0;
+let pvScale = 1;
+let pvOffsetX = 0;
+let pvOffsetY = 0;
+let pvDragActive = false;
+let pvDragMoved = false;
+let pvDragStartX = 0;
+let pvDragStartY = 0;
+let pvDragOriginX = 0;
+let pvDragOriginY = 0;
 
 // ─────────────────────────────────────────────────────────────────
 // INIT
@@ -1437,8 +1480,10 @@ document.getElementById('renameInput').addEventListener('keydown', e => {
 });
 document.getElementById('renameConfirmBtn').addEventListener('click', confirmRename);
 document.getElementById('deleteFileBtn').addEventListener('click', deletePhoto);
-document.getElementById('lightboxClose').addEventListener('click', () => document.getElementById('lightbox').classList.remove('open'));
-document.getElementById('lightbox').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('open'); });
+document.getElementById('lightboxClose').addEventListener('click', () => { resetLbZoom(); document.getElementById('lightbox').classList.remove('open'); });
+document.getElementById('lightbox').addEventListener('click', e => {
+  if (e.target === e.currentTarget) { resetLbZoom(); e.currentTarget.classList.remove('open'); }
+});
 document.getElementById('searchInput').addEventListener('input', applyFilters);
 document.getElementById('filterPersonSelect').addEventListener('change', e => { addPersonFilter(e.target.value); });
 document.getElementById('filterTagged').addEventListener('change', applyFilters);
@@ -1480,6 +1525,9 @@ document.getElementById('captionInput').addEventListener('input', markDirty);
 
 // Keyboard navigation in edit view
 document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('lightbox').classList.contains('open')) {
+    resetLbZoom(); document.getElementById('lightbox').classList.remove('open'); return;
+  }
   if (e.key === 'Escape' && bulkSelectMode) { exitSelectMode(); return; }
   if (bulkSelectMode && !e.ctrlKey && !e.altKey && !e.metaKey && e.key.length === 1) {
     const activeTag = document.activeElement?.tagName;
@@ -1967,6 +2015,7 @@ function preloadAdjacent(currentIdx, n = 2) {
 }
 
 async function selectPhoto(photo) {
+  resetPvZoom();
   currentPhoto = photo;
   const meta = metadata[photo.name] || {};
 
@@ -2740,10 +2789,90 @@ function executeBulkApply(targets, addPeople, date, overwriteDate, caption, over
 }
 
 // ─────────────────────────────────────────────────────────────────
+// PREVIEW PANE ZOOM
+// ─────────────────────────────────────────────────────────────────
+function applyPvZoom() {
+  const img = document.getElementById('fullPreviewImg');
+  const pane = document.getElementById('fullPreviewPane');
+  // Clamp offsets so image edges can't be dragged past the pane edges
+  const maxX = Math.max(0, (img.offsetWidth  * pvScale - pane.clientWidth)  / 2);
+  const maxY = Math.max(0, (img.offsetHeight * pvScale - pane.clientHeight) / 2);
+  pvOffsetX = Math.max(-maxX, Math.min(maxX, pvOffsetX));
+  pvOffsetY = Math.max(-maxY, Math.min(maxY, pvOffsetY));
+  img.style.transform = pvScale === 1 ? '' : `translate(${pvOffsetX}px, ${pvOffsetY}px) scale(${pvScale})`;
+  img.classList.toggle('pv-zoomed', pvScale > 1 && !pvDragActive);
+  img.classList.toggle('pv-dragging', pvDragActive);
+  if (pvScale === 1) img.style.cursor = '';
+}
+
+function resetPvZoom() {
+  pvScale = 1; pvOffsetX = 0; pvOffsetY = 0;
+  pvDragActive = false; pvDragMoved = false;
+  applyPvZoom();
+}
+
+// Click: zoom in or zoom out
+document.getElementById('fullPreviewImg').addEventListener('click', e => {
+  if (pvDragMoved) { pvDragMoved = false; return; }
+  if (pvScale === 1) { pvScale = 2.5; applyPvZoom(); }
+  else { resetPvZoom(); }
+});
+
+// Scroll wheel: adjust zoom level
+document.getElementById('fullPreviewPane').addEventListener('wheel', e => {
+  if (!document.getElementById('fullPreviewPane').classList.contains('visible')) return;
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.2 : 1 / 1.2;
+  pvScale = Math.min(8, Math.max(1, pvScale * factor));
+  if (pvScale === 1) { pvOffsetX = 0; pvOffsetY = 0; }
+  applyPvZoom();
+}, { passive: false });
+
+// Drag: pan when zoomed
+document.getElementById('fullPreviewImg').addEventListener('mousedown', e => {
+  if (pvScale === 1) return;
+  e.preventDefault();
+  pvDragActive = true;
+  pvDragMoved = false;
+  pvDragOriginX = e.clientX;
+  pvDragOriginY = e.clientY;
+  pvDragStartX = e.clientX - pvOffsetX;
+  pvDragStartY = e.clientY - pvOffsetY;
+  applyPvZoom();
+});
+document.addEventListener('mousemove', e => {
+  if (!pvDragActive) return;
+  if (Math.abs(e.clientX - pvDragOriginX) > 4 || Math.abs(e.clientY - pvDragOriginY) > 4) pvDragMoved = true;
+  pvOffsetX = e.clientX - pvDragStartX;
+  pvOffsetY = e.clientY - pvDragStartY;
+  applyPvZoom();
+});
+document.addEventListener('mouseup', e => {
+  if (!pvDragActive) return;
+  pvDragActive = false;
+  applyPvZoom();
+});
+
+// ─────────────────────────────────────────────────────────────────
 // LIGHTBOX
 // ─────────────────────────────────────────────────────────────────
+function applyLbZoom() {
+  const img = document.getElementById('lightboxImg');
+  img.style.transform = lbScale === 1 ? '' : `translate(${lbOffsetX}px, ${lbOffsetY}px) scale(${lbScale})`;
+  img.classList.toggle('lb-zoomed', lbScale > 1 && !lbDragActive);
+  img.classList.toggle('lb-dragging', lbDragActive);
+  if (lbScale === 1) img.style.cursor = '';
+}
+
+function resetLbZoom() {
+  lbScale = 1; lbOffsetX = 0; lbOffsetY = 0;
+  lbDragActive = false; lbDragMoved = false;
+  applyLbZoom();
+}
+
 function openLightbox() {
   if (!currentPhoto) return;
+  resetLbZoom();
   document.getElementById('lightboxImg').src = currentPhoto.fullUrl;
   const meta = metadata[currentPhoto.name] || {};
   let cap = '';
@@ -2753,6 +2882,48 @@ function openLightbox() {
   document.getElementById('lightboxCaption').textContent = cap;
   document.getElementById('lightbox').classList.add('open');
 }
+
+// Click image: zoom in (scale=1) or zoom out (scale>1), unless it was a drag
+document.getElementById('lightboxImg').addEventListener('click', e => {
+  if (lbDragMoved) { lbDragMoved = false; return; }
+  if (lbScale === 1) { lbScale = 2.5; applyLbZoom(); }
+  else { resetLbZoom(); }
+});
+
+// Scroll wheel: adjust zoom level
+document.getElementById('lightbox').addEventListener('wheel', e => {
+  if (!document.getElementById('lightbox').classList.contains('open')) return;
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.2 : 1 / 1.2;
+  lbScale = Math.min(8, Math.max(1, lbScale * factor));
+  if (lbScale === 1) { lbOffsetX = 0; lbOffsetY = 0; }
+  applyLbZoom();
+}, { passive: false });
+
+// Drag: pan when zoomed in
+document.getElementById('lightboxImg').addEventListener('mousedown', e => {
+  if (lbScale === 1) return;
+  e.preventDefault();
+  lbDragActive = true;
+  lbDragMoved = false;
+  lbDragOriginX = e.clientX;
+  lbDragOriginY = e.clientY;
+  lbDragStartX = e.clientX - lbOffsetX;
+  lbDragStartY = e.clientY - lbOffsetY;
+  applyLbZoom();
+});
+document.addEventListener('mousemove', e => {
+  if (!lbDragActive) return;
+  if (Math.abs(e.clientX - lbDragOriginX) > 4 || Math.abs(e.clientY - lbDragOriginY) > 4) lbDragMoved = true;
+  lbOffsetX = e.clientX - lbDragStartX;
+  lbOffsetY = e.clientY - lbDragStartY;
+  applyLbZoom();
+});
+document.addEventListener('mouseup', () => {
+  if (!lbDragActive) return;
+  lbDragActive = false;
+  applyLbZoom();
+});
 
 
 // ─────────────────────────────────────────────────────────────────
