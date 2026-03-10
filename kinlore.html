@@ -457,6 +457,50 @@
     margin: 0 -20px 14px;
     border-bottom: 1px solid rgba(200,146,78,0.15);
   }
+  .mode-toggle {
+    display: flex;
+    border: 1px solid rgba(200,146,78,0.5);
+    border-radius: 20px;
+    overflow: hidden;
+  }
+  .mode-btn {
+    font-family: 'Lora', Georgia, serif;
+    font-size: 0.8rem;
+    padding: 5px 14px;
+    border: none;
+    background: transparent;
+    color: var(--sepia);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-weight: 500;
+  }
+  .mode-btn.active {
+    background: var(--sepia);
+    color: #fff;
+  }
+  .mode-btn:hover:not(.active) {
+    background: rgba(200,146,78,0.12);
+  }
+  .video-play-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -60%);
+    width: 40px;
+    height: 40px;
+    background: rgba(28,21,16,0.65);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--paper);
+    font-size: 1rem;
+    pointer-events: none;
+    border: 2px solid rgba(255,255,255,0.3);
+  }
+  .photo-card:hover .video-play-overlay {
+    background: rgba(200,146,78,0.8);
+  }
   #searchInput {
     font-family: var(--ui-font);
     font-size: 0.85rem;
@@ -1267,6 +1311,7 @@
       <!-- Full-size preview (shown when editing a photo) -->
       <div id="fullPreviewPane">
         <img id="fullPreviewImg" src="" alt="Full preview" />
+        <video id="fullPreviewVideo" controls style="display:none; max-width:100%; max-height:100%; object-fit:contain;"></video>
         <div id="previewSpinner"></div>
         <div id="fullPreviewFilename"></div>
         <button id="closePreviewBtn" title="Return to grid">✕</button>
@@ -1278,6 +1323,10 @@
       <!-- Grid section (becomes a compact strip when preview is open) -->
       <div id="gridSection" class="full">
         <div id="gridToolbar">
+          <div id="modeToggle" class="mode-toggle">
+            <button class="mode-btn active" data-mode="photo">Photos</button>
+            <button class="mode-btn" data-mode="video">Videos</button>
+          </div>
           <input id="searchInput" type="text" placeholder="Search…" />
           <div id="filterPeopleWrap">
             <select id="filterPersonSelect"><option value="" disabled selected>Filter by person…</option></select>
@@ -1300,7 +1349,7 @@
     <div id="editorPanel">
       <div id="editorPlaceholder">
         <div class="arrow">←</div>
-        <p>Select a photo from the grid to tag it.</p>
+        <p id="editorPlaceholderText">Select a photo from the grid to tag it.</p>
       </div>
 
       <div id="editorContent">
@@ -1439,6 +1488,7 @@
 <div id="lightbox">
   <button id="lightboxClose">✕</button>
   <img id="lightboxImg" src="" alt="" />
+  <video id="lightboxVideo" controls style="display:none; max-width:min(90vw,900px); max-height:78vh; border:6px solid var(--paper); box-shadow:0 0 80px rgba(0,0,0,0.8);"></video>
   <div id="lightboxCaption"></div>
   <div id="lightboxZoomHint">Click to zoom · Scroll to adjust · Click to zoom out</div>
 </div>
@@ -1447,8 +1497,11 @@
 // ─────────────────────────────────────────────────────────────────
 // STATE
 // ─────────────────────────────────────────────────────────────────
+const IMAGE_EXTS = new Set(['.jpg','.jpeg','.png','.bmp','.tiff','.tif','.webp']);
+const VIDEO_EXTS = new Set(['.mp4','.webm','.mov','.m4v']);
+let mediaMode = 'photo'; // 'photo' or 'video'
 let dirHandle = null;
-let photos = [];       // [{name, thumbUrl, fullUrl, fileHandle, thumbHandle}]
+let photos = [];       // [{name, thumbUrl, fullUrl, fileHandle, thumbHandle, type:'photo'|'video'}]
 let metadata = {};     // {filename: {people:[], date:'', caption:''}}
 let allPeople = [];    // master list of known names
 let thumbsDirHandle = null; // retained so rename/delete can access the thumbs subfolder
@@ -1544,6 +1597,25 @@ document.getElementById('bulkTagText').addEventListener('keydown', onBulkTagKeyd
 document.getElementById('bulkTagText').addEventListener('blur', () => setTimeout(() => { document.getElementById('bulkTagSuggestions').style.display = 'none'; }, 150));
 document.getElementById('bulkTagInputWrap').addEventListener('click', () => document.getElementById('bulkTagText').focus());
 
+function updateModeLabels() {
+  const noun = mediaMode === 'video' ? 'video' : 'photo';
+  const Noun = mediaMode === 'video' ? 'Video' : 'Photo';
+  document.getElementById('editorPlaceholderText').textContent = `Select a ${noun} from the grid to tag it.`;
+  const taggedSelect = document.getElementById('filterTagged');
+  taggedSelect.options[0].text = `All ${noun}s`;
+}
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.dataset.mode === mediaMode) return;
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    mediaMode = btn.dataset.mode;
+    if (currentPhoto && currentPhoto.type !== mediaMode) closePreview();
+    updateModeLabels();
+    applyFilters();
+  });
+});
+
 document.getElementById('saveNextBtn').addEventListener('click', saveAndNext);
 document.getElementById('savePhotoBtn').addEventListener('click', saveCurrentPhoto);
 document.getElementById('discardBtn').addEventListener('click', discardChanges);
@@ -1576,9 +1648,9 @@ document.getElementById('renameInput').addEventListener('keydown', e => {
 });
 document.getElementById('renameConfirmBtn').addEventListener('click', confirmRename);
 document.getElementById('deleteFileBtn').addEventListener('click', deletePhoto);
-document.getElementById('lightboxClose').addEventListener('click', () => { resetLbZoom(); document.getElementById('lightbox').classList.remove('open'); });
+document.getElementById('lightboxClose').addEventListener('click', () => { resetLbZoom(); document.getElementById('lightboxVideo').pause(); document.getElementById('lightboxVideo').src = ''; document.getElementById('lightbox').classList.remove('open'); });
 document.getElementById('lightbox').addEventListener('click', e => {
-  if (e.target === e.currentTarget) { resetLbZoom(); e.currentTarget.classList.remove('open'); }
+  if (e.target === e.currentTarget) { resetLbZoom(); document.getElementById('lightboxVideo').pause(); document.getElementById('lightboxVideo').src = ''; e.currentTarget.classList.remove('open'); }
 });
 document.getElementById('searchInput').addEventListener('input', applyFilters);
 document.getElementById('filterPersonSelect').addEventListener('change', e => { addPersonFilter(e.target.value); });
@@ -1622,7 +1694,7 @@ document.getElementById('captionInput').addEventListener('input', markDirty);
 // Keyboard navigation in edit view
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && document.getElementById('lightbox').classList.contains('open')) {
-    resetLbZoom(); document.getElementById('lightbox').classList.remove('open'); return;
+    resetLbZoom(); document.getElementById('lightboxVideo').pause(); document.getElementById('lightboxVideo').src = ''; document.getElementById('lightbox').classList.remove('open'); return;
   }
   if (e.key === 'Escape' && bulkSelectMode) { exitSelectMode(); return; }
   if (bulkSelectMode && !e.ctrlKey && !e.altKey && !e.metaKey && e.key.length === 1) {
@@ -1737,8 +1809,8 @@ async function openFolder() {
   }
 
   // Scan what's in the folder to populate modal
-  const EXTS = new Set(['.jpg','.jpeg','.png','.bmp','.tiff','.tif','.webp']);
   let photoCount = 0;
+  let videoCount = 0;
   let hasThumbs = false;
   let hasMetadata = false;
   let metaCount = 0;
@@ -1767,13 +1839,16 @@ async function openFolder() {
   for await (const entry of _pendingDirHandle.values()) {
     if (entry.kind === 'file') {
       const ext = entry.name.substring(entry.name.lastIndexOf('.')).toLowerCase();
-      if (EXTS.has(ext)) photoCount++;
+      if (IMAGE_EXTS.has(ext)) photoCount++;
+      else if (VIDEO_EXTS.has(ext)) videoCount++;
     }
   }
 
   document.getElementById('modalFolderName').textContent = _pendingDirHandle.name;
   document.getElementById('modalStat').innerHTML =
-    `<strong>${photoCount}</strong> photo${photoCount !== 1 ? 's' : ''} found` +
+    `<strong>${photoCount}</strong> photo${photoCount !== 1 ? 's' : ''}` +
+    (videoCount > 0 ? ` · <strong>${videoCount}</strong> video${videoCount !== 1 ? 's' : ''}` : '') +
+    ' found' +
     (hasMetadata ? ` · <strong>${metaCount}</strong> already tagged` : ' · No existing tags') +
     (hasThumbs ? ' · Thumbnails folder exists' : ' · No thumbnails yet');
 
@@ -1832,13 +1907,13 @@ async function loadFolder() {
     } catch { metadata = {}; }
   }
 
-  // Collect all image entries first — just directory metadata, very fast even at scale
-  const EXTS = new Set(['.jpg','.jpeg','.png','.bmp','.tiff','.tif','.webp']);
+  // Collect all media entries first — just directory metadata, very fast even at scale
+  const ALL_EXTS = new Set([...IMAGE_EXTS, ...VIDEO_EXTS]);
   const entries = [];
   for await (const entry of dirHandle.values()) {
     if (entry.kind !== 'file') continue;
     const ext = entry.name.substring(entry.name.lastIndexOf('.')).toLowerCase();
-    if (EXTS.has(ext)) entries.push(entry);
+    if (ALL_EXTS.has(ext)) entries.push(entry);
   }
   entries.sort((a, b) => a.name.localeCompare(b.name)); // stable display order while loading
 
@@ -1857,16 +1932,18 @@ async function loadFolder() {
   for (let i = 0; i < entries.length; i += BATCH_SIZE) {
     const batch = entries.slice(i, i + BATCH_SIZE);
     const batchPhotos = await Promise.all(batch.map(async entry => {
+      const ext = entry.name.substring(entry.name.lastIndexOf('.')).toLowerCase();
+      const type = VIDEO_EXTS.has(ext) ? 'video' : 'photo';
       let thumbHandle = null;
       if (thumbsHandle) {
-        const thumbName = entry.name.replace(/\.[^.]+$/, '.jpg');
+        const thumbName = (type === 'video' ? 'v_' : '') + entry.name.replace(/\.[^.]+$/, '.jpg');
         try { thumbHandle = await thumbsHandle.getFileHandle(thumbName); } catch {}
       }
       const displayHandle = thumbHandle || entry;
       const thumbFile = await displayHandle.getFile();
       const thumbUrl = URL.createObjectURL(thumbFile);
       // fullUrl is created lazily on first selection — saves one getFile() per photo at load time
-      return { name: entry.name, thumbUrl, fullUrl: null, fileHandle: entry, thumbHandle };
+      return { name: entry.name, thumbUrl, fullUrl: null, fileHandle: entry, thumbHandle, type };
     }));
 
     photos.push(...batchPhotos);
@@ -1884,15 +1961,20 @@ async function loadFolder() {
     if (db) return 1;
     return a.name.localeCompare(b.name);
   });
-  renderGrid(photos);
+  applyFilters();
   setLoadProgress(null, 0);
+  const nPhotos = photos.filter(p => p.type === 'photo').length;
+  const nVideos = photos.filter(p => p.type === 'video').length;
   if (!thumbsHandle && photos.length > 0) {
     setStatus(`⚠ No "thumbs" folder — showing originals. Use "Generate Thumbnails" for better performance.`);
     appendLog('WARN', 'No thumbs folder — showing originals');
   } else {
-    setStatus(`Opened: ${dirHandle.name} — ${photos.length} photo(s) found.`);
+    const parts = [];
+    if (nPhotos) parts.push(`${nPhotos} photo${nPhotos !== 1 ? 's' : ''}`);
+    if (nVideos) parts.push(`${nVideos} video${nVideos !== 1 ? 's' : ''}`);
+    setStatus(`Opened: ${dirHandle.name} — ${parts.join(', ')} found.`);
   }
-  appendLog('INFO', `Opened folder: ${dirHandle.name} (${photos.length} photos, ${Object.keys(metadata).length} tagged)`);
+  appendLog('INFO', `Opened folder: ${dirHandle.name} (${nPhotos} photos, ${nVideos} videos, ${Object.keys(metadata).length} tagged)`);
   document.getElementById('exportBtn').disabled = false;
   document.getElementById('exportViewerBtn').disabled = false;
   document.getElementById('viewLogsBtn').disabled = false;
@@ -1973,13 +2055,15 @@ function renderGrid(list) {
   const grid = document.getElementById('photoGrid');
   grid.innerHTML = '';
 
+  const modeNoun = mediaMode === 'video' ? 'videos' : 'photos';
   if (!list.length) {
-    grid.innerHTML = '<div id="emptyGrid">No photos match the current filter.</div>';
+    grid.innerHTML = `<div id="emptyGrid">No ${modeNoun} match the current filter.</div>`;
     document.getElementById('gridStat').textContent = '';
     return;
   }
 
-  document.getElementById('gridStat').textContent = `${list.length} of ${photos.length} photos`;
+  const totalForMode = photos.filter(p => p.type === mediaMode).length;
+  document.getElementById('gridStat').textContent = `${list.length} of ${totalForMode} ${modeNoun}`;
 
   list.forEach(photo => {
     const meta = metadata[photo.name] || {};
@@ -1988,10 +2072,12 @@ function renderGrid(list) {
     const card = document.createElement('div');
     card.dataset.name = photo.name;
 
+    const isVideo = photo.type === 'video';
     if (bulkSelectMode) {
       card.className = 'photo-card' + (selectedPhotos.has(photo.name) ? ' bulk-selected' : '');
       card.innerHTML = `
         <img src="${photo.thumbUrl}" alt="${photo.name}" loading="lazy" />
+        ${isVideo ? '<div class="video-play-overlay">\u25B6</div>' : ''}
         ${tagged ? '<div class="tagged-indicator" title="Tagged"></div>' : ''}
         <div class="bulk-checkbox${selectedPhotos.has(photo.name) ? ' checked' : ''}"></div>
         <div class="photo-card-meta">
@@ -2004,6 +2090,7 @@ function renderGrid(list) {
       card.className = 'photo-card' + (currentPhoto?.name === photo.name ? ' selected' : '');
       card.innerHTML = `
         <img src="${photo.thumbUrl}" alt="${photo.name}" loading="lazy" />
+        ${isVideo ? '<div class="video-play-overlay">\u25B6</div>' : ''}
         ${tagged ? '<div class="tagged-indicator" title="Tagged"></div>' : ''}
         <div class="photo-card-meta">
           <div class="photo-card-name">${photo.name}</div>
@@ -2022,7 +2109,7 @@ function applyFilters() {
   const search = document.getElementById('searchInput').value.toLowerCase().trim();
   const tagged = document.getElementById('filterTagged').value;
 
-  let list = photos;
+  let list = photos.filter(p => p.type === mediaMode);
   if (search) list = list.filter(p => {
     const m = metadata[p.name];
     return p.name.toLowerCase().includes(search) ||
@@ -2102,9 +2189,9 @@ function preloadImage(url) {
 function preloadAdjacent(currentIdx, n = 2) {
   for (let i = 1; i <= n; i++) {
     const next = filteredPhotos[currentIdx + i];
-    if (next) ensureFullUrl(next).then(url => preloadImage(url));
+    if (next && next.type !== 'video') ensureFullUrl(next).then(url => preloadImage(url));
     const prev = filteredPhotos[currentIdx - i];
-    if (prev) ensureFullUrl(prev).then(url => preloadImage(url));
+    if (prev && prev.type !== 'video') ensureFullUrl(prev).then(url => preloadImage(url));
   }
 }
 
@@ -2143,27 +2230,44 @@ async function selectPhoto(photo) {
   hideSuggestions();
   document.getElementById('editorPanel').scrollTop = 0;
 
-  // Decode image asynchronously — show spinner, swap in when ready
+  // Load media — image or video
   const displayImg = document.getElementById('fullPreviewImg');
-  previewPane.classList.add('loading-img');
-  displayImg.classList.add('loading');
+  const displayVid = document.getElementById('fullPreviewVideo');
 
-  try {
+  if (photo.type === 'video') {
+    displayImg.style.display = 'none';
+    displayImg.classList.remove('loading');
+    displayVid.style.display = 'block';
     const url = await ensureFullUrl(photo);
-    const decoded = await preloadImage(url);
-    // Only apply if this photo is still the current one
     if (currentPhoto?.name === photo.name) {
-      displayImg.src = decoded.src;
+      displayVid.src = url;
+    }
+    previewPane.classList.remove('loading-img');
+  } else {
+    displayVid.style.display = 'none';
+    displayVid.pause();
+    displayVid.src = '';
+    displayImg.style.display = '';
+    previewPane.classList.add('loading-img');
+    displayImg.classList.add('loading');
+
+    try {
+      const url = await ensureFullUrl(photo);
+      const decoded = await preloadImage(url);
+      // Only apply if this photo is still the current one
+      if (currentPhoto?.name === photo.name) {
+        displayImg.src = decoded.src;
+        displayImg.classList.remove('loading');
+        previewPane.classList.remove('loading-img');
+      }
+    } catch {
+      displayImg.src = photo.fullUrl || ''; // fallback
       displayImg.classList.remove('loading');
       previewPane.classList.remove('loading-img');
     }
-  } catch {
-    displayImg.src = photo.fullUrl || ''; // fallback
-    displayImg.classList.remove('loading');
-    previewPane.classList.remove('loading-img');
   }
 
-  // Kick off background preload for upcoming photos; update nav button states
+  // Kick off background preload for upcoming items; update nav button states
   const idx = filteredPhotos.findIndex(p => p.name === photo.name);
   if (idx !== -1) preloadAdjacent(idx);
   document.getElementById('prevPhotoBtn').disabled = idx <= 0;
@@ -2224,6 +2328,9 @@ function closePreview() {
     const choice = confirm('You have unsaved changes.\n\nOK = Save & close\nCancel = Discard & close');
     if (choice) saveCurrentPhoto();
   }
+  // Pause any playing video
+  const vid = document.getElementById('fullPreviewVideo');
+  vid.pause(); vid.src = '';
   // Return to full grid view
   document.getElementById('fullPreviewPane').classList.remove('visible');
   document.getElementById('gridSection').classList.remove('strip');
@@ -2457,10 +2564,11 @@ async function renamePhoto(photo, newName) {
 
     // Rename the thumbnail too if it exists
     let newThumbHandle = photo.thumbHandle;
+    const thumbPrefix = photo.type === 'video' ? 'v_' : '';
     if (thumbsDirHandle && photo.thumbHandle) {
       try {
-        const oldThumbName = oldName.replace(/\.[^.]+$/, '.jpg');
-        const newThumbName = newName.replace(/\.[^.]+$/, '.jpg');
+        const oldThumbName = thumbPrefix + oldName.replace(/\.[^.]+$/, '.jpg');
+        const newThumbName = thumbPrefix + newName.replace(/\.[^.]+$/, '.jpg');
         const thumbFile = await photo.thumbHandle.getFile();
         const nt = await thumbsDirHandle.getFileHandle(newThumbName, { create: true });
         const tw = await nt.createWritable();
@@ -2523,7 +2631,8 @@ async function deletePhoto() {
 
     // Delete the thumbnail too
     if (thumbsDirHandle && photo.thumbHandle) {
-      try { await thumbsDirHandle.removeEntry(name.replace(/\.[^.]+$/, '.jpg')); } catch {}
+      const thumbPrefix = photo.type === 'video' ? 'v_' : '';
+      try { await thumbsDirHandle.removeEntry(thumbPrefix + name.replace(/\.[^.]+$/, '.jpg')); } catch {}
     }
 
     // Revoke cached object URLs
@@ -2541,7 +2650,9 @@ async function deletePhoto() {
 
     // Remove the grid card
     document.querySelector(`.photo-card[data-name="${name}"]`)?.remove();
-    document.getElementById('gridStat').textContent = `${filteredPhotos.length} of ${photos.length} photos`;
+    const mNoun = mediaMode === 'video' ? 'videos' : 'photos';
+    const mTotal = photos.filter(p => p.type === mediaMode).length;
+    document.getElementById('gridStat').textContent = `${filteredPhotos.length} of ${mTotal} ${mNoun}`;
 
     // Navigate away
     isDirty = false;
@@ -3017,9 +3128,10 @@ document.getElementById('fullPreviewImg').addEventListener('click', e => {
   else { resetPvZoom(); }
 });
 
-// Scroll wheel: adjust zoom level
+// Scroll wheel: adjust zoom level (disabled for videos)
 document.getElementById('fullPreviewPane').addEventListener('wheel', e => {
   if (!document.getElementById('fullPreviewPane').classList.contains('visible')) return;
+  if (currentPhoto?.type === 'video') return;
   e.preventDefault();
   const factor = e.deltaY < 0 ? 1.2 : 1 / 1.2;
   pvScale = Math.min(8, Math.max(1, pvScale * factor));
@@ -3072,7 +3184,23 @@ function resetLbZoom() {
 function openLightbox() {
   if (!currentPhoto) return;
   resetLbZoom();
-  document.getElementById('lightboxImg').src = currentPhoto.fullUrl;
+  const lbImg = document.getElementById('lightboxImg');
+  const lbVid = document.getElementById('lightboxVideo');
+
+  if (currentPhoto.type === 'video') {
+    lbImg.style.display = 'none';
+    lbVid.style.display = 'block';
+    lbVid.src = currentPhoto.fullUrl;
+    document.getElementById('lightboxZoomHint').style.display = 'none';
+  } else {
+    lbVid.style.display = 'none';
+    lbVid.pause();
+    lbVid.src = '';
+    lbImg.style.display = '';
+    lbImg.src = currentPhoto.fullUrl;
+    document.getElementById('lightboxZoomHint').style.display = '';
+  }
+
   const meta = metadata[currentPhoto.name] || {};
   let cap = '';
   if (meta.people?.length) cap += meta.people.join(', ');
@@ -3089,9 +3217,10 @@ document.getElementById('lightboxImg').addEventListener('click', e => {
   else { resetLbZoom(); }
 });
 
-// Scroll wheel: adjust zoom level
+// Scroll wheel: adjust zoom level (disabled for videos)
 document.getElementById('lightbox').addEventListener('wheel', e => {
   if (!document.getElementById('lightbox').classList.contains('open')) return;
+  if (currentPhoto?.type === 'video') return;
   e.preventDefault();
   const factor = e.deltaY < 0 ? 1.2 : 1 / 1.2;
   lbScale = Math.min(8, Math.max(1, lbScale * factor));
@@ -3128,21 +3257,49 @@ document.addEventListener('mouseup', () => {
 // ─────────────────────────────────────────────────────────────────
 // IN-BROWSER THUMBNAIL GENERATION (Canvas API)
 // ─────────────────────────────────────────────────────────────────
+function captureVideoFrame(url, seekTime = 1) {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    video.muted = true;
+    video.preload = 'auto';
+    video.src = url;
+    video.addEventListener('loadeddata', () => {
+      video.currentTime = Math.min(seekTime, video.duration * 0.1 || seekTime);
+    });
+    video.addEventListener('seeked', () => {
+      try {
+        const canvas = document.createElement('canvas');
+        const THUMB_MAX = 400;
+        let w = video.videoWidth, h = video.videoHeight;
+        if (w > THUMB_MAX || h > THUMB_MAX) {
+          const scale = THUMB_MAX / Math.max(w, h);
+          w = Math.round(w * scale); h = Math.round(h * scale);
+        }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(video, 0, 0, w, h);
+        canvas.toBlob(blob => { video.src = ''; resolve(blob); }, 'image/jpeg', 0.85);
+      } catch (e) { reject(e); }
+    });
+    video.addEventListener('error', () => reject(new Error('Video load failed')));
+    setTimeout(() => reject(new Error('Video thumb timeout')), 15000);
+  });
+}
+
 async function generateThumbsInBrowser() {
   const THUMB_MAX = 400;
-  const EXTS = new Set(['.jpg','.jpeg','.png','.bmp','.tiff','.tif','.webp']);
-
   // Get or create _kinlore admin subdir, then thumbs inside it
   let _adminDir;
   try { _adminDir = await _pendingDirHandle.getDirectoryHandle('_kinlore', { create: true }); } catch { _adminDir = _pendingDirHandle; }
   const thumbsDir = await _adminDir.getDirectoryHandle('thumbs', { create: true });
 
-  // Collect photo files
+  // Collect image and video files separately
   const files = [];
+  const videoFiles = [];
   for await (const entry of _pendingDirHandle.values()) {
     if (entry.kind !== 'file') continue;
     const ext = entry.name.substring(entry.name.lastIndexOf('.')).toLowerCase();
-    if (EXTS.has(ext)) files.push(entry);
+    if (IMAGE_EXTS.has(ext)) files.push(entry);
+    else if (VIDEO_EXTS.has(ext)) videoFiles.push(entry);
   }
 
   // Check which thumbs already exist & are current
@@ -3160,14 +3317,6 @@ async function generateThumbsInBrowser() {
 
   const progressText = document.getElementById('thumbProgressText');
   const progressBar  = document.getElementById('thumbProgressBar');
-
-  if (toProcess.length === 0) {
-    progressText.textContent = `All ${files.length} thumbnails are up to date.`;
-    progressBar.style.width = '100%';
-    appendLog('INFO', `Thumbnails: 0 generated, ${files.length} skipped (all up to date)`);
-    await new Promise(r => setTimeout(r, 800));
-    return;
-  }
 
   // ── Parallel processing via Web Workers ──────────────────────────
   // Worker code: receives a File, resizes with OffscreenCanvas, returns JPEG blob
@@ -3197,7 +3346,7 @@ async function generateThumbsInBrowser() {
   // Scale workers to ~75% of logical cores — leaves headroom for UI thread and OS
   const cores = navigator.hardwareConcurrency || 4;
   const WORKER_COUNT = Math.max(1, Math.floor(cores * 0.75));
-  progressText.textContent = `Starting ${WORKER_COUNT} parallel workers…`;
+  if (toProcess.length > 0) progressText.textContent = `Starting ${WORKER_COUNT} parallel workers…`;
 
   // Create worker pool
   const workers = Array.from({ length: WORKER_COUNT }, () => new Worker(workerUrl));
@@ -3258,9 +3407,53 @@ async function generateThumbsInBrowser() {
   workers.forEach(w => w.terminate());
   URL.revokeObjectURL(workerUrl);
 
-  const errNote = errors > 0 ? ` (${errors} error${errors > 1 ? 's' : ''})` : '';
-  progressText.textContent = `Done! Generated ${completed - errors} thumbnail${completed !== 1 ? 's' : ''}${errNote}.`;
-  appendLog('INFO', `Thumbnails: ${completed - errors} generated, ${files.length - toProcess.length} skipped${errNote}`);
+  const imgGenerated = completed - errors;
+
+  // ── Video thumbnails (main thread — no Web Worker for <video>) ──
+  const videoToProcess = [];
+  for (const entry of videoFiles) {
+    const thumbName = 'v_' + entry.name.replace(/\.[^.]+$/, '.jpg');
+    let needsUpdate = true;
+    try {
+      const thumbHandle = await thumbsDir.getFileHandle(thumbName);
+      const [src, th] = await Promise.all([entry.getFile(), thumbHandle.getFile()]);
+      if (th.lastModified >= src.lastModified) needsUpdate = false;
+    } catch {}
+    if (needsUpdate) videoToProcess.push(entry);
+  }
+
+  let videoCompleted = 0;
+  let videoErrors = 0;
+  for (let i = 0; i < videoToProcess.length; i++) {
+    progressText.textContent = `Generating video thumbnails… ${i + 1} of ${videoToProcess.length}`;
+    progressBar.style.width = ((i + 1) / videoToProcess.length * 100) + '%';
+    try {
+      const file = await videoToProcess[i].getFile();
+      const url = URL.createObjectURL(file);
+      const blob = await captureVideoFrame(url);
+      URL.revokeObjectURL(url);
+      const thumbName = 'v_' + videoToProcess[i].name.replace(/\.[^.]+$/, '.jpg');
+      const thumbHandle = await thumbsDir.getFileHandle(thumbName, { create: true });
+      const writable = await thumbHandle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      videoCompleted++;
+    } catch (e) {
+      videoErrors++;
+      console.warn('Video thumb failed:', videoToProcess[i].name, e);
+      appendLog('WARN', `Video thumbnail failed: ${videoToProcess[i].name}`);
+    }
+  }
+
+  const totalGenerated = imgGenerated + videoCompleted;
+  const totalSkipped = (files.length - toProcess.length) + (videoFiles.length - videoToProcess.length);
+  const totalErrors = errors + videoErrors;
+  const errNote = totalErrors > 0 ? ` (${totalErrors} error${totalErrors > 1 ? 's' : ''})` : '';
+  progressText.textContent = totalGenerated === 0
+    ? `All ${totalSkipped} thumbnails are up to date.`
+    : `Done! Generated ${totalGenerated} thumbnail${totalGenerated !== 1 ? 's' : ''}${errNote}.`;
+  progressBar.style.width = '100%';
+  appendLog('INFO', `Thumbnails: ${imgGenerated} image + ${videoCompleted} video generated, ${totalSkipped} skipped${errNote}`);
   await new Promise(r => setTimeout(r, 600));
 }
 
@@ -3352,7 +3545,7 @@ if (!('showDirectoryPicker' in window)) {
 // ─────────────────────────────────────────────────────────────────
 // VIEWER GENERATION
 // ─────────────────────────────────────────────────────────────────
-const VIEWER_TEMPLATE = "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\"/>\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0\"/>\n<title>Family Photos</title>\n<style>\n  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Lora:ital,wght@0,400;0,500;1,400&display=swap');\n\n  :root {\n    --ink:        #1e1309;\n    --ink-mid:    #4a3728;\n    --ink-light:  #7a6050;\n    --paper:      #f8f0e3;\n    --paper-mid:  #ede0cc;\n    --paper-dark: #e0cdb5;\n    --sepia:      #c9a86c;\n    --sepia-dark: #9a7840;\n    --accent:     #7b3f2a;\n    --shadow:     rgba(30,19,9,0.22);\n    --green:      #5a8a5a;\n  }\n  *, *::before, *::after { box-sizing: border-box; margin:0; padding:0; }\n\n  html { scroll-behavior: smooth; }\n\n  body {\n    background: var(--ink);\n    color: var(--paper);\n    font-family: 'Lora', Georgia, serif;\n    min-height: 100vh;\n  }\n\n  /* \u2500\u2500 Hero Header \u2500\u2500 */\n  #hero {\n    background: var(--ink);\n    padding: 52px 40px 36px;\n    text-align: center;\n    position: relative;\n    overflow: hidden;\n    border-bottom: 2px solid var(--sepia-dark);\n  }\n  #hero::before {\n    content: '';\n    position: absolute;\n    inset: 0;\n    background:\n      radial-gradient(ellipse at 20% 50%, rgba(201,168,108,0.07) 0%, transparent 60%),\n      radial-gradient(ellipse at 80% 50%, rgba(123,63,42,0.08) 0%, transparent 60%);\n    pointer-events: none;\n  }\n  .hero-ornament {\n    font-family: 'Playfair Display', serif;\n    font-size: 1rem;\n    color: var(--sepia);\n    letter-spacing: 0.4em;\n    text-transform: uppercase;\n    opacity: 0.7;\n    margin-bottom: 14px;\n  }\n  #hero h1 {\n    font-family: 'Playfair Display', serif;\n    font-size: clamp(2rem, 5vw, 3.4rem);\n    font-weight: 700;\n    color: var(--paper);\n    line-height: 1.15;\n    margin-bottom: 10px;\n  }\n  #hero h1 em {\n    font-style: italic;\n    color: var(--sepia);\n  }\n  .hero-sub {\n    color: var(--ink-light);\n    font-size: 0.88rem;\n    font-style: italic;\n    letter-spacing: 0.03em;\n  }\n  .hero-rule {\n    width: 80px;\n    height: 1px;\n    background: var(--sepia);\n    margin: 18px auto;\n    opacity: 0.5;\n  }\n\n  /* \u2500\u2500 Controls \u2500\u2500 */\n  #controls {\n    background: var(--ink-mid);\n    padding: 16px 32px;\n    display: flex;\n    gap: 14px;\n    align-items: center;\n    flex-wrap: wrap;\n    border-bottom: 1px solid rgba(201,168,108,0.2);\n    position: sticky;\n    top: 0;\n    z-index: 50;\n  }\n\n  .filter-wrap {\n    display: flex;\n    flex-wrap: wrap;\n    align-items: center;\n    gap: 5px;\n    background: rgba(255,255,255,0.08);\n    border: 1px solid rgba(201,168,108,0.5);\n    border-radius: 20px;\n    padding: 5px 12px;\n    flex: 1;\n    min-width: 160px;\n  }\n  .filter-pill {\n    display: flex;\n    align-items: center;\n    gap: 3px;\n    background: rgba(201,168,108,0.35);\n    border: 1px solid rgba(201,168,108,0.6);\n    color: var(--paper);\n    font-size: 0.75rem;\n    padding: 2px 4px 2px 9px;\n    border-radius: 20px;\n    font-weight: 600;\n    white-space: nowrap;\n  }\n  .filter-pill button {\n    background: none;\n    border: none;\n    cursor: pointer;\n    color: var(--paper);\n    font-size: 0.85rem;\n    line-height: 1;\n    padding: 0 2px;\n    opacity: 0.6;\n  }\n  .filter-pill button:hover { opacity: 1; }\n  #personSelect {\n    border: none;\n    outline: none;\n    background: transparent;\n    font-size: 0.8rem;\n    color: var(--paper-mid);\n    cursor: pointer;\n    padding: 2px 0;\n    min-width: 110px;\n    flex-shrink: 0;\n  }\n  #personSelect option { background: var(--ink-mid); color: var(--paper); }\n\n  #searchBox {\n    font-family: 'Lora', serif;\n    font-size: 0.82rem;\n    padding: 6px 14px;\n    background: rgba(255,255,255,0.08);\n    border: 1px solid rgba(201,168,108,0.5);\n    border-radius: 20px;\n    color: var(--paper);\n    outline: none;\n    width: 180px;\n    transition: border-color 0.15s;\n  }\n  #searchBox::placeholder { color: rgba(248,240,227,0.4); }\n  #searchBox:focus { border-color: var(--sepia); }\n\n  .photo-count {\n    font-size: 0.75rem;\n    color: var(--paper-mid);\n    margin-left: auto;\n    white-space: nowrap;\n    opacity: 0.7;\n  }\n\n  /* \u2500\u2500 Grid \u2500\u2500 */\n  #main { padding: 28px 24px 60px; }\n\n  #grid {\n    display: grid;\n    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));\n    gap: 18px;\n  }\n\n  .card {\n    background: var(--paper-dark);\n    border-radius: 2px;\n    overflow: hidden;\n    cursor: pointer;\n    box-shadow: 3px 3px 14px var(--shadow), 0 0 0 1px rgba(201,168,108,0.15);\n    transition: transform 0.18s, box-shadow 0.18s;\n    position: relative;\n  }\n  .card:hover {\n    transform: translateY(-4px) scale(1.01);\n    box-shadow: 6px 10px 28px var(--shadow), 0 0 0 1px rgba(201,168,108,0.4);\n  }\n\n  /* Polaroid-style white border */\n  .card-img-wrap {\n    padding: 10px 10px 0;\n    background: var(--paper);\n  }\n  .card img {\n    width: 100%;\n    aspect-ratio: 1;\n    object-fit: cover;\n    display: block;\n    filter: sepia(20%) contrast(1.05) brightness(0.97);\n    transition: filter 0.2s;\n  }\n  .card:hover img { filter: sepia(8%) contrast(1.07) brightness(1.0); }\n\n  .card-body {\n    background: var(--paper);\n    padding: 10px 12px 12px;\n  }\n  .card-caption {\n    font-family: 'Lora', serif;\n    font-size: 0.8rem;\n    color: var(--ink-mid);\n    font-style: italic;\n    line-height: 1.4;\n    margin-bottom: 6px;\n    min-height: 1.1em;\n  }\n  .card-date {\n    font-size: 0.7rem;\n    color: var(--ink-light);\n    margin-bottom: 6px;\n    font-style: italic;\n  }\n  .card-tags {\n    display: flex;\n    flex-wrap: wrap;\n    gap: 4px;\n  }\n  .card-tag {\n    background: var(--sepia-dark);\n    color: var(--paper);\n    font-size: 0.65rem;\n    padding: 2px 8px;\n    border-radius: 20px;\n    letter-spacing: 0.02em;\n  }\n\n  /* \u2500\u2500 Empty state \u2500\u2500 */\n  #empty {\n    display: none;\n    text-align: center;\n    padding: 80px 20px;\n    color: var(--ink-light);\n    font-style: italic;\n    font-size: 0.95rem;\n    grid-column: 1/-1;\n  }\n\n  /* \u2500\u2500 Lightbox \u2500\u2500 */\n  #lb {\n    display: none;\n    position: fixed;\n    inset: 0;\n    background: rgba(10,6,2,0.96);\n    z-index: 200;\n    align-items: center;\n    justify-content: center;\n    flex-direction: column;\n    gap: 0;\n  }\n  #lb.open { display: flex; }\n\n  #lbClose {\n    position: absolute;\n    top: 16px; right: 20px;\n    background: none; border: none;\n    color: var(--paper-mid);\n    font-size: 1.8rem;\n    cursor: pointer;\n    opacity: 0.6;\n    font-family: serif;\n    line-height: 1;\n    z-index: 10;\n  }\n  #lbClose:hover { opacity: 1; }\n\n  #lbPrev, #lbNext {\n    position: absolute;\n    top: 50%; transform: translateY(-50%);\n    background: rgba(201,168,108,0.15);\n    border: 1px solid rgba(201,168,108,0.3);\n    color: var(--paper);\n    font-size: 1.6rem;\n    width: 44px; height: 44px;\n    border-radius: 50%;\n    cursor: pointer;\n    display: flex; align-items: center; justify-content: center;\n    transition: background 0.15s;\n    z-index: 10;\n  }\n  #lbPrev { left: 16px; }\n  #lbNext { right: 16px; }\n  #lbPrev:hover, #lbNext:hover { background: rgba(201,168,108,0.35); }\n\n  #lbImg {\n    max-width: min(90vw, 900px);\n    max-height: 78vh;\n    object-fit: contain;\n    box-shadow: 0 0 80px rgba(0,0,0,0.8);\n    filter: sepia(10%) contrast(1.04);\n    border: 6px solid var(--paper);\n  }\n\n  #lbMeta {\n    margin-top: 16px;\n    text-align: center;\n    max-width: 600px;\n    padding: 0 20px;\n  }\n  #lbPeople {\n    font-family: 'Playfair Display', serif;\n    font-size: 1.05rem;\n    color: var(--paper);\n    margin-bottom: 4px;\n  }\n  #lbDate {\n    font-size: 0.82rem;\n    color: var(--sepia);\n    font-style: italic;\n    margin-bottom: 5px;\n  }\n  #lbCaption {\n    font-size: 0.85rem;\n    color: var(--ink-light);\n    font-style: italic;\n    line-height: 1.5;\n  }\n  #lbCounter {\n    font-size: 0.72rem;\n    color: var(--ink-light);\n    margin-top: 8px;\n    letter-spacing: 0.05em;\n  }\n\n  /* \u2500\u2500 Footer \u2500\u2500 */\n  footer {\n    background: var(--ink);\n    border-top: 1px solid rgba(201,168,108,0.15);\n    text-align: center;\n    padding: 20px;\n    font-size: 0.75rem;\n    color: var(--ink-light);\n    font-style: italic;\n  }\n\n  /* \u2500\u2500 Scrollbar \u2500\u2500 */\n  ::-webkit-scrollbar { width: 6px; }\n  ::-webkit-scrollbar-track { background: var(--ink); }\n  ::-webkit-scrollbar-thumb { background: var(--sepia-dark); border-radius: 3px; }\n\n  @media (max-width: 600px) {\n    #hero { padding: 36px 20px 24px; }\n    #controls { padding: 12px 16px; }\n    #grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }\n    #lbPrev { left: 6px; } #lbNext { right: 6px; }\n  }\n</style>\n</head>\n<body>\n\n<div id=\"hero\">\n  <div class=\"hero-ornament\">\u2726 &nbsp; A Family Archive &nbsp; \u2726</div>\n  <h1 id=\"heroTitle\">Family <em>Photographs</em></h1>\n  <div class=\"hero-rule\"></div>\n  <p class=\"hero-sub\" id=\"heroSub\"></p>\n</div>\n\n<div id=\"controls\">\n  <div class=\"filter-wrap\" id=\"filterWrap\">\n    <select id=\"personSelect\"><option value=\"\" disabled selected>Filter by person\u2026</option></select>\n  </div>\n  <input id=\"searchBox\" type=\"text\" placeholder=\"Search\u2026\" />\n  <span class=\"photo-count\" id=\"photoCount\"></span>\n</div>\n\n<div id=\"main\">\n  <div id=\"grid\">\n    <div id=\"empty\">No photos match this filter.</div>\n  </div>\n</div>\n\n<footer>These photographs were lovingly preserved for our family.</footer>\n\n<!-- Lightbox -->\n<div id=\"lb\">\n  <button id=\"lbClose\">\u2715</button>\n  <button id=\"lbPrev\">&#8249;</button>\n  <button id=\"lbNext\">&#8250;</button>\n  <img id=\"lbImg\" src=\"\" alt=\"\" />\n  <div id=\"lbMeta\">\n    <div id=\"lbPeople\"></div>\n    <div id=\"lbDate\"></div>\n    <div id=\"lbCaption\"></div>\n    <div id=\"lbCounter\"></div>\n  </div>\n</div>\n\n<script>\n// \u2500\u2500 METADATA (injected by tagger) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nconst METADATA = __METADATA_JSON__;\nconst TITLE    = \"__TITLE__\";\nconst PHOTO_DIR = '__PHOTO_DIR__';\n// \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\ndocument.getElementById('heroTitle').innerHTML = TITLE\n  ? TITLE.replace(/(.+)/, (_, t) => {\n      const words = t.split(' ');\n      const last = words.pop();\n      return (words.length ? words.join(' ') + ' ' : '') + '<em>' + last + '</em>';\n    })\n  : 'Family <em>Photographs</em>';\n\n// Build photo list from metadata\nlet photos = Object.entries(METADATA).map(([filename, meta]) => ({\n  filename,\n  thumb: PHOTO_DIR + 'thumbs/' + filename.replace(/\\.[^.]+$/, '.jpg'),\n  full: PHOTO_DIR + filename,\n  people: meta.people || [],\n  date: meta.date || '',\n  caption: meta.caption || ''\n}));\n\n// Sort by date, undated last\nphotos.sort((a, b) => {\n  if (a.date && b.date) return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;\n  if (a.date) return -1;\n  if (b.date) return 1;\n  return a.filename.localeCompare(b.filename);\n});\n\n// Build people list\nconst allPeople = [...new Set(photos.flatMap(p => p.people))].sort();\nconst personSelect = document.getElementById('personSelect');\nallPeople.forEach(name => {\n  const opt = document.createElement('option');\n  opt.value = name; opt.textContent = name;\n  personSelect.appendChild(opt);\n});\n\ndocument.getElementById('heroSub').textContent =\n  photos.length + ' photographs' + (allPeople.length ? ' \u00b7 ' + allPeople.length + ' people' : '');\n\n// \u2500\u2500 Filtering \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nlet selectedPeople = new Set();\nlet searchTerm = '';\nlet filtered = [...photos];\nlet lbIndex = 0;\n\nfunction addPersonFilter(name) {\n  if (!name || selectedPeople.has(name)) return;\n  selectedPeople.add(name);\n  renderFilterPills();\n  applyFilter();\n}\n\nfunction removePersonFilter(name) {\n  selectedPeople.delete(name);\n  renderFilterPills();\n  applyFilter();\n}\n\nfunction renderFilterPills() {\n  const wrap = document.getElementById('filterWrap');\n  wrap.querySelectorAll('.filter-pill').forEach(p => p.remove());\n  selectedPeople.forEach(name => {\n    const pill = document.createElement('div');\n    pill.className = 'filter-pill';\n    pill.innerHTML = name + '<button title=\"Remove\">\u2715</button>';\n    pill.querySelector('button').addEventListener('click', () => removePersonFilter(name));\n    wrap.insertBefore(pill, personSelect);\n  });\n  const sel = document.getElementById('personSelect');\n  while (sel.options.length > 1) sel.remove(1);\n  allPeople.filter(n => !selectedPeople.has(n)).forEach(name => {\n    const opt = document.createElement('option');\n    opt.value = name; opt.textContent = name;\n    sel.appendChild(opt);\n  });\n  sel.value = '';\n}\n\nfunction applyFilter() {\n  const lower = searchTerm.toLowerCase();\n  filtered = photos.filter(p => {\n    const matchPerson = selectedPeople.size === 0 || [...selectedPeople].every(n => p.people.includes(n));\n    const matchSearch = !lower ||\n      p.caption.toLowerCase().includes(lower) ||\n      p.people.some(n => n.toLowerCase().includes(lower)) ||\n      p.filename.toLowerCase().includes(lower) ||\n      p.date.toLowerCase().includes(lower);\n    return matchPerson && matchSearch;\n  });\n  renderGrid();\n}\n\npersonSelect.addEventListener('change', e => {\n  addPersonFilter(e.target.value);\n});\n\ndocument.getElementById('searchBox').addEventListener('input', e => {\n  searchTerm = e.target.value.trim();\n  applyFilter();\n});\n\n// \u2500\u2500 Grid render \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction renderGrid() {\n  const grid = document.getElementById('grid');\n  const empty = document.getElementById('empty');\n  document.getElementById('photoCount').textContent =\n    filtered.length === photos.length\n      ? photos.length + ' photos'\n      : filtered.length + ' of ' + photos.length + ' photos';\n\n  // Remove old cards\n  grid.querySelectorAll('.card').forEach(c => c.remove());\n\n  if (!filtered.length) { empty.style.display = 'block'; return; }\n  empty.style.display = 'none';\n\n  filtered.forEach((photo, idx) => {\n    const card = document.createElement('div');\n    card.className = 'card';\n    card.innerHTML = \\`\n      <div class=\"card-img-wrap\">\n        <img src=\"\\${photo.thumb}\" alt=\"\\${photo.filename}\" loading=\"lazy\"\n             onerror=\"this.src='\\${photo.full}'\" />\n      </div>\n      <div class=\"card-body\">\n        <div class=\"card-caption\">\\${photo.caption || '&nbsp;'}</div>\n        \\${photo.date ? \\`<div class=\"card-date\">\\${fmtDate(photo.date)}</div>\\` : ''}\n        <div class=\"card-tags\">\\${photo.people.map(p => \\`<span class=\"card-tag\">\\${p}</span>\\`).join('')}</div>\n      </div>\\`;\n    card.addEventListener('click', () => openLb(idx));\n    grid.appendChild(card);\n  });\n}\n\n// \u2500\u2500 Lightbox \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction openLb(idx) {\n  lbIndex = idx;\n  showLb();\n  document.getElementById('lb').classList.add('open');\n}\n\nfunction showLb() {\n  const p = filtered[lbIndex];\n  document.getElementById('lbImg').src = p.full;\n  document.getElementById('lbPeople').textContent = p.people.join(' \u00b7 ') || '';\n  document.getElementById('lbDate').textContent = p.date ? fmtDate(p.date) : '';\n  document.getElementById('lbCaption').textContent = p.caption || '';\n  document.getElementById('lbCounter').textContent = (lbIndex + 1) + ' of ' + filtered.length;\n}\n\ndocument.getElementById('lbClose').addEventListener('click', () => document.getElementById('lb').classList.remove('open'));\ndocument.getElementById('lb').addEventListener('click', e => { if (e.target === e.currentTarget) e.currentTarget.classList.remove('open'); });\ndocument.getElementById('lbPrev').addEventListener('click', () => { lbIndex = (lbIndex - 1 + filtered.length) % filtered.length; showLb(); });\ndocument.getElementById('lbNext').addEventListener('click', () => { lbIndex = (lbIndex + 1) % filtered.length; showLb(); });\n\ndocument.addEventListener('keydown', e => {\n  const lb = document.getElementById('lb');\n  if (!lb.classList.contains('open')) return;\n  if (e.key === 'ArrowRight') { lbIndex = (lbIndex + 1) % filtered.length; showLb(); }\n  if (e.key === 'ArrowLeft')  { lbIndex = (lbIndex - 1 + filtered.length) % filtered.length; showLb(); }\n  if (e.key === 'Escape') lb.classList.remove('open');\n});\n\n// \u2500\u2500 Helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction fmtDate(d) {\n  if (!d) return '';\n  const parts = d.split('-');\n  const year = parts[0], month = parts[1], day = parts[2];\n  if (!month) return year;\n  const names = ['January','February','March','April','May','June','July','August','September','October','November','December'];\n  const mn = names[parseInt(month,10)-1] || month;\n  if (!day) return mn + ' ' + year;\n  try { return new Date(d + 'T12:00:00').toLocaleDateString('en-US', {year:'numeric',month:'short',day:'numeric'}); }\n  catch { return d; }\n}\n\n// \u2500\u2500 Init \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nrenderGrid();\n<\/script>\n</body>\n</html>";
+const VIEWER_TEMPLATE = "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\"/>\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0\"/>\n<title>Family Photos</title>\n<style>\n  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Lora:ital,wght@0,400;0,500;1,400&display=swap');\n\n  :root {\n    --ink:        #1e1309;\n    --ink-mid:    #4a3728;\n    --ink-light:  #7a6050;\n    --paper:      #f8f0e3;\n    --paper-mid:  #ede0cc;\n    --paper-dark: #e0cdb5;\n    --sepia:      #c9a86c;\n    --sepia-dark: #9a7840;\n    --accent:     #7b3f2a;\n    --shadow:     rgba(30,19,9,0.22);\n    --green:      #5a8a5a;\n  }\n  *, *::before, *::after { box-sizing: border-box; margin:0; padding:0; }\n\n  html { scroll-behavior: smooth; }\n\n  body {\n    background: var(--ink);\n    color: var(--paper);\n    font-family: 'Lora', Georgia, serif;\n    min-height: 100vh;\n  }\n\n  /* \u2500\u2500 Hero Header \u2500\u2500 */\n  #hero {\n    background: var(--ink);\n    padding: 52px 40px 36px;\n    text-align: center;\n    position: relative;\n    overflow: hidden;\n    border-bottom: 2px solid var(--sepia-dark);\n  }\n  #hero::before {\n    content: '';\n    position: absolute;\n    inset: 0;\n    background:\n      radial-gradient(ellipse at 20% 50%, rgba(201,168,108,0.07) 0%, transparent 60%),\n      radial-gradient(ellipse at 80% 50%, rgba(123,63,42,0.08) 0%, transparent 60%);\n    pointer-events: none;\n  }\n  .hero-ornament {\n    font-family: 'Playfair Display', serif;\n    font-size: 1rem;\n    color: var(--sepia);\n    letter-spacing: 0.4em;\n    text-transform: uppercase;\n    opacity: 0.7;\n    margin-bottom: 14px;\n  }\n  #hero h1 {\n    font-family: 'Playfair Display', serif;\n    font-size: clamp(2rem, 5vw, 3.4rem);\n    font-weight: 700;\n    color: var(--paper);\n    line-height: 1.15;\n    margin-bottom: 10px;\n  }\n  #hero h1 em {\n    font-style: italic;\n    color: var(--sepia);\n  }\n  .hero-sub {\n    color: var(--ink-light);\n    font-size: 0.88rem;\n    font-style: italic;\n    letter-spacing: 0.03em;\n  }\n  .hero-rule {\n    width: 80px;\n    height: 1px;\n    background: var(--sepia);\n    margin: 18px auto;\n    opacity: 0.5;\n  }\n\n  /* \u2500\u2500 Controls \u2500\u2500 */\n  #controls {\n    background: var(--ink-mid);\n    padding: 16px 32px;\n    display: flex;\n    gap: 14px;\n    align-items: center;\n    flex-wrap: wrap;\n    border-bottom: 1px solid rgba(201,168,108,0.2);\n    position: sticky;\n    top: 0;\n    z-index: 50;\n  }\n\n  .filter-wrap {\n    display: flex;\n    flex-wrap: wrap;\n    align-items: center;\n    gap: 5px;\n    background: rgba(255,255,255,0.08);\n    border: 1px solid rgba(201,168,108,0.5);\n    border-radius: 20px;\n    padding: 5px 12px;\n    flex: 1;\n    min-width: 160px;\n  }\n  .filter-pill {\n    display: flex;\n    align-items: center;\n    gap: 3px;\n    background: rgba(201,168,108,0.35);\n    border: 1px solid rgba(201,168,108,0.6);\n    color: var(--paper);\n    font-size: 0.75rem;\n    padding: 2px 4px 2px 9px;\n    border-radius: 20px;\n    font-weight: 600;\n    white-space: nowrap;\n  }\n  .filter-pill button {\n    background: none;\n    border: none;\n    cursor: pointer;\n    color: var(--paper);\n    font-size: 0.85rem;\n    line-height: 1;\n    padding: 0 2px;\n    opacity: 0.6;\n  }\n  .filter-pill button:hover { opacity: 1; }\n  #personSelect {\n    border: none;\n    outline: none;\n    background: transparent;\n    font-size: 0.8rem;\n    color: var(--paper-mid);\n    cursor: pointer;\n    padding: 2px 0;\n    min-width: 110px;\n    flex-shrink: 0;\n  }\n  #personSelect option { background: var(--ink-mid); color: var(--paper); }\n\n  #searchBox {\n    font-family: 'Lora', serif;\n    font-size: 0.82rem;\n    padding: 6px 14px;\n    background: rgba(255,255,255,0.08);\n    border: 1px solid rgba(201,168,108,0.5);\n    border-radius: 20px;\n    color: var(--paper);\n    outline: none;\n    width: 180px;\n    transition: border-color 0.15s;\n  }\n  #searchBox::placeholder { color: rgba(248,240,227,0.4); }\n  #searchBox:focus { border-color: var(--sepia); }\n\n  .photo-count {\n    font-size: 0.75rem;\n    color: var(--paper-mid);\n    margin-left: auto;\n    white-space: nowrap;\n    opacity: 0.7;\n  }\n\n  /* \u2500\u2500 Grid \u2500\u2500 */\n  #main { padding: 28px 24px 60px; }\n\n  #grid {\n    display: grid;\n    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));\n    gap: 18px;\n  }\n\n  .card {\n    background: var(--paper-dark);\n    border-radius: 2px;\n    overflow: hidden;\n    cursor: pointer;\n    box-shadow: 3px 3px 14px var(--shadow), 0 0 0 1px rgba(201,168,108,0.15);\n    transition: transform 0.18s, box-shadow 0.18s;\n    position: relative;\n  }\n  .card:hover {\n    transform: translateY(-4px) scale(1.01);\n    box-shadow: 6px 10px 28px var(--shadow), 0 0 0 1px rgba(201,168,108,0.4);\n  }\n\n  /* Polaroid-style white border */\n  .card-img-wrap {\n    padding: 10px 10px 0;\n    background: var(--paper);\n  }\n  .card img {\n    width: 100%;\n    aspect-ratio: 1;\n    object-fit: cover;\n    display: block;\n    filter: sepia(20%) contrast(1.05) brightness(0.97);\n    transition: filter 0.2s;\n  }\n  .card:hover img { filter: sepia(8%) contrast(1.07) brightness(1.0); }\n\n  .card-body {\n    background: var(--paper);\n    padding: 10px 12px 12px;\n  }\n  .card-caption {\n    font-family: 'Lora', serif;\n    font-size: 0.8rem;\n    color: var(--ink-mid);\n    font-style: italic;\n    line-height: 1.4;\n    margin-bottom: 6px;\n    min-height: 1.1em;\n  }\n  .card-date {\n    font-size: 0.7rem;\n    color: var(--ink-light);\n    margin-bottom: 6px;\n    font-style: italic;\n  }\n  .card-tags {\n    display: flex;\n    flex-wrap: wrap;\n    gap: 4px;\n  }\n  .card-tag {\n    background: var(--sepia-dark);\n    color: var(--paper);\n    font-size: 0.65rem;\n    padding: 2px 8px;\n    border-radius: 20px;\n    letter-spacing: 0.02em;\n  }\n\n  /* \u2500\u2500 Empty state \u2500\u2500 */\n  #empty {\n    display: none;\n    text-align: center;\n    padding: 80px 20px;\n    color: var(--ink-light);\n    font-style: italic;\n    font-size: 0.95rem;\n    grid-column: 1/-1;\n  }\n\n  /* \u2500\u2500 Lightbox \u2500\u2500 */\n  #lb {\n    display: none;\n    position: fixed;\n    inset: 0;\n    background: rgba(10,6,2,0.96);\n    z-index: 200;\n    align-items: center;\n    justify-content: center;\n    flex-direction: column;\n    gap: 0;\n  }\n  #lb.open { display: flex; }\n\n  #lbClose {\n    position: absolute;\n    top: 16px; right: 20px;\n    background: none; border: none;\n    color: var(--paper-mid);\n    font-size: 1.8rem;\n    cursor: pointer;\n    opacity: 0.6;\n    font-family: serif;\n    line-height: 1;\n    z-index: 10;\n  }\n  #lbClose:hover { opacity: 1; }\n\n  #lbPrev, #lbNext {\n    position: absolute;\n    top: 50%; transform: translateY(-50%);\n    background: rgba(201,168,108,0.15);\n    border: 1px solid rgba(201,168,108,0.3);\n    color: var(--paper);\n    font-size: 1.6rem;\n    width: 44px; height: 44px;\n    border-radius: 50%;\n    cursor: pointer;\n    display: flex; align-items: center; justify-content: center;\n    transition: background 0.15s;\n    z-index: 10;\n  }\n  #lbPrev { left: 16px; }\n  #lbNext { right: 16px; }\n  #lbPrev:hover, #lbNext:hover { background: rgba(201,168,108,0.35); }\n\n  #lbImg {\n    max-width: min(90vw, 900px);\n    max-height: 78vh;\n    object-fit: contain;\n    box-shadow: 0 0 80px rgba(0,0,0,0.8);\n    filter: sepia(10%) contrast(1.04);\n    border: 6px solid var(--paper);\n  }\n\n  #lbMeta {\n    margin-top: 16px;\n    text-align: center;\n    max-width: 600px;\n    padding: 0 20px;\n  }\n  #lbPeople {\n    font-family: 'Playfair Display', serif;\n    font-size: 1.05rem;\n    color: var(--paper);\n    margin-bottom: 4px;\n  }\n  #lbDate {\n    font-size: 0.82rem;\n    color: var(--sepia);\n    font-style: italic;\n    margin-bottom: 5px;\n  }\n  #lbCaption {\n    font-size: 0.85rem;\n    color: var(--ink-light);\n    font-style: italic;\n    line-height: 1.5;\n  }\n  #lbCounter {\n    font-size: 0.72rem;\n    color: var(--ink-light);\n    margin-top: 8px;\n    letter-spacing: 0.05em;\n  }\n\n  /* \u2500\u2500 Footer \u2500\u2500 */\n  footer {\n    background: var(--ink);\n    border-top: 1px solid rgba(201,168,108,0.15);\n    text-align: center;\n    padding: 20px;\n    font-size: 0.75rem;\n    color: var(--ink-light);\n    font-style: italic;\n  }\n\n  /* \u2500\u2500 Scrollbar \u2500\u2500 */\n  ::-webkit-scrollbar { width: 6px; }\n  ::-webkit-scrollbar-track { background: var(--ink); }\n  ::-webkit-scrollbar-thumb { background: var(--sepia-dark); border-radius: 3px; }\n\n  .mode-toggle {\n    display: flex;\n    border: 1px solid rgba(201,168,108,0.5);\n    border-radius: 20px;\n    overflow: hidden;\n  }\n  .mode-btn {\n    font-family: 'Lora', serif;\n    font-size: 0.8rem;\n    padding: 5px 14px;\n    border: none;\n    background: transparent;\n    color: var(--sepia);\n    cursor: pointer;\n    transition: all 0.15s;\n    font-weight: 500;\n  }\n  .mode-btn.active {\n    background: var(--sepia);\n    color: #fff;\n  }\n  .mode-btn:hover:not(.active) {\n    background: rgba(201,168,108,0.15);\n  }\n  .video-play-overlay {\n    position: absolute;\n    top: 50%;\n    left: 50%;\n    transform: translate(-50%, -60%);\n    width: 40px;\n    height: 40px;\n    background: rgba(28,21,16,0.65);\n    border-radius: 50%;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    color: var(--paper);\n    font-size: 1rem;\n    pointer-events: none;\n    border: 2px solid rgba(255,255,255,0.3);\n  }\n  .card:hover .video-play-overlay {\n    background: rgba(201,168,108,0.8);\n  }\n  .card-img-wrap { position: relative; }\n  #lbVid {\n    max-width: min(90vw, 900px);\n    max-height: 78vh;\n    box-shadow: 0 0 80px rgba(0,0,0,0.8);\n    border: 6px solid var(--paper);\n  }\n\n  @media (max-width: 600px) {\n    #hero { padding: 36px 20px 24px; }\n    #controls { padding: 12px 16px; }\n    #grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }\n    #lbPrev { left: 6px; } #lbNext { right: 6px; }\n  }\n</style>\n</head>\n<body>\n\n<div id=\"hero\">\n  <div class=\"hero-ornament\">\u2726 &nbsp; A Family Archive &nbsp; \u2726</div>\n  <h1 id=\"heroTitle\">Family <em>Photographs</em></h1>\n  <div class=\"hero-rule\"></div>\n  <p class=\"hero-sub\" id=\"heroSub\"></p>\n</div>\n\n<div id=\"controls\">\n  <div class=\"mode-toggle\" id=\"modeToggle\">\n    <button class=\"mode-btn active\" data-mode=\"photo\">Photos</button>\n    <button class=\"mode-btn\" data-mode=\"video\">Videos</button>\n  </div>\n  <div class=\"filter-wrap\" id=\"filterWrap\">\n    <select id=\"personSelect\"><option value=\"\" disabled selected>Filter by person\u2026</option></select>\n  </div>\n  <input id=\"searchBox\" type=\"text\" placeholder=\"Search\u2026\" />\n  <span class=\"photo-count\" id=\"photoCount\"></span>\n</div>\n\n<div id=\"main\">\n  <div id=\"grid\">\n    <div id=\"empty\">No photos match this filter.</div>\n  </div>\n</div>\n\n<footer>These photographs were lovingly preserved for our family.</footer>\n\n<!-- Lightbox -->\n<div id=\"lb\">\n  <button id=\"lbClose\">\u2715</button>\n  <button id=\"lbPrev\">&#8249;</button>\n  <button id=\"lbNext\">&#8250;</button>\n  <img id=\"lbImg\" src=\"\" alt=\"\" />\n  <video id=\"lbVid\" controls style=\"display:none;\"></video>\n  <div id=\"lbMeta\">\n    <div id=\"lbPeople\"></div>\n    <div id=\"lbDate\"></div>\n    <div id=\"lbCaption\"></div>\n    <div id=\"lbCounter\"></div>\n  </div>\n</div>\n\n<script>\n// \u2500\u2500 METADATA (injected by tagger) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nconst METADATA = __METADATA_JSON__;\nconst TITLE    = \"__TITLE__\";\nconst PHOTO_DIR = '__PHOTO_DIR__';\n// \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\ndocument.getElementById('heroTitle').innerHTML = TITLE\n  ? TITLE.replace(/(.+)/, (_, t) => {\n      const words = t.split(' ');\n      const last = words.pop();\n      return (words.length ? words.join(' ') + ' ' : '') + '<em>' + last + '</em>';\n    })\n  : 'Family <em>Photographs</em>';\n\n// Build photo list from metadata\nlet photos = Object.entries(METADATA).map(([filename, meta]) => ({\n  filename,\n  thumb: PHOTO_DIR + 'thumbs/' + (meta.type === 'video' ? 'v_' : '') + filename.replace(/\\.[^.]+$/, '.jpg'),\n  full: PHOTO_DIR + filename,\n  people: meta.people || [],\n  date: meta.date || '',\n  caption: meta.caption || '',\n  type: meta.type || 'photo'\n}));\n\n// Sort by date, undated last\nphotos.sort((a, b) => {\n  if (a.date && b.date) return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;\n  if (a.date) return -1;\n  if (b.date) return 1;\n  return a.filename.localeCompare(b.filename);\n});\n\n// Build people list\nconst allPeople = [...new Set(photos.flatMap(p => p.people))].sort();\nconst personSelect = document.getElementById('personSelect');\nallPeople.forEach(name => {\n  const opt = document.createElement('option');\n  opt.value = name; opt.textContent = name;\n  personSelect.appendChild(opt);\n});\n\nconst nPhotos = photos.filter(p => p.type === 'photo').length;\nconst nVideos = photos.filter(p => p.type === 'video').length;\nlet heroText = nPhotos + ' photograph' + (nPhotos !== 1 ? 's' : '');\nif (nVideos > 0) heroText += ' \\u00b7 ' + nVideos + ' video' + (nVideos !== 1 ? 's' : '');\nif (allPeople.length) heroText += ' \\u00b7 ' + allPeople.length + ' people';\ndocument.getElementById('heroSub').textContent = heroText;\n\n// \u2500\u2500 Filtering \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nlet selectedPeople = new Set();\nlet searchTerm = '';\nlet viewerMode = 'photo';\nlet filtered = [...photos];\nlet lbIndex = 0;\n\ndocument.querySelectorAll('.mode-btn').forEach(btn => {\n  btn.addEventListener('click', () => {\n    if (btn.dataset.mode === viewerMode) return;\n    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));\n    btn.classList.add('active');\n    viewerMode = btn.dataset.mode;\n    applyFilter();\n  });\n});\n\nfunction addPersonFilter(name) {\n  if (!name || selectedPeople.has(name)) return;\n  selectedPeople.add(name);\n  renderFilterPills();\n  applyFilter();\n}\n\nfunction removePersonFilter(name) {\n  selectedPeople.delete(name);\n  renderFilterPills();\n  applyFilter();\n}\n\nfunction renderFilterPills() {\n  const wrap = document.getElementById('filterWrap');\n  wrap.querySelectorAll('.filter-pill').forEach(p => p.remove());\n  selectedPeople.forEach(name => {\n    const pill = document.createElement('div');\n    pill.className = 'filter-pill';\n    pill.innerHTML = name + '<button title=\"Remove\">\u2715</button>';\n    pill.querySelector('button').addEventListener('click', () => removePersonFilter(name));\n    wrap.insertBefore(pill, personSelect);\n  });\n  const sel = document.getElementById('personSelect');\n  while (sel.options.length > 1) sel.remove(1);\n  allPeople.filter(n => !selectedPeople.has(n)).forEach(name => {\n    const opt = document.createElement('option');\n    opt.value = name; opt.textContent = name;\n    sel.appendChild(opt);\n  });\n  sel.value = '';\n}\n\nfunction applyFilter() {\n  const lower = searchTerm.toLowerCase();\n  filtered = photos.filter(p => {\n    if (p.type !== viewerMode) return false;\n    const matchPerson = selectedPeople.size === 0 || [...selectedPeople].every(n => p.people.includes(n));\n    const matchSearch = !lower ||\n      p.caption.toLowerCase().includes(lower) ||\n      p.people.some(n => n.toLowerCase().includes(lower)) ||\n      p.filename.toLowerCase().includes(lower) ||\n      p.date.toLowerCase().includes(lower);\n    return matchPerson && matchSearch;\n  });\n  renderGrid();\n}\n\npersonSelect.addEventListener('change', e => {\n  addPersonFilter(e.target.value);\n});\n\ndocument.getElementById('searchBox').addEventListener('input', e => {\n  searchTerm = e.target.value.trim();\n  applyFilter();\n});\n\n// \u2500\u2500 Grid render \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction renderGrid() {\n  const grid = document.getElementById('grid');\n  const empty = document.getElementById('empty');\n  const noun = viewerMode === 'video' ? 'videos' : 'photos';\n  const totalForMode = photos.filter(p => p.type === viewerMode).length;\n  document.getElementById('photoCount').textContent =\n    filtered.length === totalForMode\n      ? totalForMode + ' ' + noun\n      : filtered.length + ' of ' + totalForMode + ' ' + noun;\n\n  // Remove old cards\n  grid.querySelectorAll('.card').forEach(c => c.remove());\n\n  if (!filtered.length) { empty.textContent = 'No ' + noun + ' match this filter.'; empty.style.display = 'block'; return; }\n  empty.style.display = 'none';\n\n  filtered.forEach((photo, idx) => {\n    const card = document.createElement('div');\n    card.className = 'card';\n    const playOverlay = photo.type === 'video' ? '<div class=\"video-play-overlay\">\\u25B6</div>' : '';\n    card.innerHTML = \\`\n      <div class=\"card-img-wrap\">\n        <img src=\"\\${photo.thumb}\" alt=\"\\${photo.filename}\" loading=\"lazy\"\n             onerror=\"this.src='\\${photo.full}'\" />\n        \\${playOverlay}\n      </div>\n      <div class=\"card-body\">\n        <div class=\"card-caption\">\\${photo.caption || '&nbsp;'}</div>\n        \\${photo.date ? \\`<div class=\"card-date\">\\${fmtDate(photo.date)}</div>\\` : ''}\n        <div class=\"card-tags\">\\${photo.people.map(p => \\`<span class=\"card-tag\">\\${p}</span>\\`).join('')}</div>\n      </div>\\`;\n    card.addEventListener('click', () => openLb(idx));\n    grid.appendChild(card);\n  });\n}\n\n// \u2500\u2500 Lightbox \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction openLb(idx) {\n  lbIndex = idx;\n  showLb();\n  document.getElementById('lb').classList.add('open');\n}\n\nfunction showLb() {\n  const p = filtered[lbIndex];\n  const lbImg = document.getElementById('lbImg');\n  const lbVid = document.getElementById('lbVid');\n  if (p.type === 'video') {\n    lbImg.style.display = 'none';\n    lbVid.style.display = 'block';\n    lbVid.src = p.full;\n  } else {\n    lbVid.pause(); lbVid.src = ''; lbVid.style.display = 'none';\n    lbImg.style.display = ''; lbImg.src = p.full;\n  }\n  document.getElementById('lbPeople').textContent = p.people.join(' \\u00b7 ') || '';\n  document.getElementById('lbDate').textContent = p.date ? fmtDate(p.date) : '';\n  document.getElementById('lbCaption').textContent = p.caption || '';\n  document.getElementById('lbCounter').textContent = (lbIndex + 1) + ' of ' + filtered.length;\n}\n\nfunction closeLb() { document.getElementById('lbVid').pause(); document.getElementById('lbVid').src = ''; document.getElementById('lb').classList.remove('open'); }\ndocument.getElementById('lbClose').addEventListener('click', closeLb);\ndocument.getElementById('lb').addEventListener('click', e => { if (e.target === e.currentTarget) closeLb(); });\ndocument.getElementById('lbPrev').addEventListener('click', () => { lbIndex = (lbIndex - 1 + filtered.length) % filtered.length; showLb(); });\ndocument.getElementById('lbNext').addEventListener('click', () => { lbIndex = (lbIndex + 1) % filtered.length; showLb(); });\n\ndocument.addEventListener('keydown', e => {\n  const lb = document.getElementById('lb');\n  if (!lb.classList.contains('open')) return;\n  if (e.key === 'ArrowRight') { lbIndex = (lbIndex + 1) % filtered.length; showLb(); }\n  if (e.key === 'ArrowLeft')  { lbIndex = (lbIndex - 1 + filtered.length) % filtered.length; showLb(); }\n  if (e.key === 'Escape') closeLb();\n});\n\n// \u2500\u2500 Helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction fmtDate(d) {\n  if (!d) return '';\n  const parts = d.split('-');\n  const year = parts[0], month = parts[1], day = parts[2];\n  if (!month) return year;\n  const names = ['January','February','March','April','May','June','July','August','September','October','November','December'];\n  const mn = names[parseInt(month,10)-1] || month;\n  if (!day) return mn + ' ' + year;\n  try { return new Date(d + 'T12:00:00').toLocaleDateString('en-US', {year:'numeric',month:'short',day:'numeric'}); }\n  catch { return d; }\n}\n\n// \u2500\u2500 Init \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\napplyFilter();\n<\/script>\n</body>\n</html>";
 
 function openExportModal() {
   if (!dirHandle) return;
@@ -3367,7 +3560,10 @@ function openExportModal() {
 function buildViewerHtml(title, photoDir) {
   const fullMeta = {};
   for (const photo of photos) {
-    fullMeta[photo.name] = metadata[photo.name] || { people: [], date: '', caption: '' };
+    fullMeta[photo.name] = {
+      ...(metadata[photo.name] || { people: [], date: '', caption: '' }),
+      type: photo.type || 'photo'
+    };
   }
   const metaJson = JSON.stringify(fullMeta, null, 2);
   const html = VIEWER_TEMPLATE
@@ -3444,7 +3640,7 @@ async function runExport() {
         const photosDir = await destHandle.getDirectoryHandle('photos', { create: true });
         const total = photos.length;
         for (let i = 0; i < total; i++) {
-          showToast(`Copying photo ${i + 1} of ${total}…`, 'working', 0);
+          showToast(`Copying file ${i + 1} of ${total}…`, 'working', 0);
           const srcFile = await photos[i].fileHandle.getFile();
           const destFile = await photosDir.getFileHandle(photos[i].name, { create: true });
           const w = await destFile.createWritable();
