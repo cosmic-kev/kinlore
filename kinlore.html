@@ -1392,6 +1392,15 @@
           <textarea id="bulkCaptionInput" placeholder="Caption for all selected photos…"></textarea>
           <div style="font-size:0.73rem;color:var(--faded);margin-top:4px;font-style:italic;">Leave blank to keep each photo's existing caption.</div>
         </div>
+        <!-- Rename -->
+        <div>
+          <label class="field-label">Rename</label>
+          <div class="save-row" style="flex-wrap:wrap;gap:8px;">
+            <button class="btn btn-secondary" id="bulkAutoRenameBtn" disabled>Auto-rename selected</button>
+            <button class="btn btn-secondary" id="bulkRevertNamesBtn" disabled>Revert names</button>
+          </div>
+          <div style="font-size:0.72rem;color:var(--faded);margin-top:5px;">Renames files using metadata. Original names are saved and can be reverted.</div>
+        </div>
         <!-- Actions -->
         <div class="save-row">
           <button class="btn btn-accent" id="bulkApplyBtn" disabled>Apply to 0 photos</button>
@@ -1519,6 +1528,8 @@ document.getElementById('selectModeBtn').addEventListener('click', () => {
 });
 document.getElementById('bulkApplyBtn').addEventListener('click', applyBulkEdit);
 document.getElementById('bulkCancelBtn').addEventListener('click', exitSelectMode);
+document.getElementById('bulkAutoRenameBtn').addEventListener('click', bulkAutoRename);
+document.getElementById('bulkRevertNamesBtn').addEventListener('click', bulkRevertNames);
 document.getElementById('bulkConflictCancelBtn').addEventListener('click', () => {
   document.getElementById('bulkConflictModal').classList.remove('open');
 });
@@ -2781,6 +2792,9 @@ function updateBulkEditorState() {
   document.getElementById('bulkApplyBtn').textContent = `Apply to ${n} photo${n !== 1 ? 's' : ''}`;
   document.getElementById('bulkApplyBtn').disabled = n === 0;
   document.getElementById('selectModeBtn').textContent = n > 0 ? `Exit · ${n} selected` : 'Exit Bulk Edit';
+  document.getElementById('bulkAutoRenameBtn').disabled = n === 0;
+  const hasRevertable = n > 0 && [...selectedPhotos].some(name => metadata[name]?.original_name);
+  document.getElementById('bulkRevertNamesBtn').disabled = !hasRevertable;
 }
 
 function applyBulkEdit() {
@@ -2863,6 +2877,108 @@ function executeBulkApply(targets, addPeople, date, overwriteDate, caption, over
   setStatus(`Bulk edit applied to ${targets.length} photo${targets.length !== 1 ? 's' : ''}`);
   appendLog('INFO', `Bulk edit: ${targets.length} photos — added people: [${addPeople.join(', ')}]`);
   exitSelectMode();
+}
+
+// ─────────────────────────────────────────────────────────────────
+// BULK RENAME
+// ─────────────────────────────────────────────────────────────────
+async function bulkAutoRename() {
+  const targets = [...selectedPhotos].map(name => photos.find(p => p.name === name)).filter(Boolean);
+
+  // Pre-generate all new names, deduplicating across the batch
+  const takenNames = new Set(photos.filter(p => !selectedPhotos.has(p.name)).map(p => p.name));
+  const renames = [];
+  const skippedNoMeta = [];
+  const skippedAlreadyNamed = [];
+
+  for (const photo of targets) {
+    const meta = metadata[photo.name] || {};
+    let newName = generatePhotoName(photo, meta);
+    if (!newName) { skippedNoMeta.push(photo.name); continue; }
+    if (newName === photo.name) { skippedAlreadyNamed.push(photo.name); continue; }
+
+    // Deduplicate within the batch and against existing files
+    if (takenNames.has(newName)) {
+      const dotIdx = newName.lastIndexOf('.');
+      const base = dotIdx !== -1 ? newName.slice(0, dotIdx) : newName;
+      const ext  = dotIdx !== -1 ? newName.slice(dotIdx) : '';
+      let n = 2;
+      do {
+        const suffix = `_${n++}`;
+        newName = base.slice(0, 100 - suffix.length) + suffix + ext;
+      } while (takenNames.has(newName) && n <= 999);
+    }
+    takenNames.add(newName);
+    renames.push({ photo, newName });
+  }
+
+  if (!renames.length) {
+    alert('No photos to rename — either no metadata exists or all files are already correctly named.');
+    return;
+  }
+
+  let msg = `Auto-rename will rename ${renames.length} photo${renames.length !== 1 ? 's' : ''} based on their metadata.`;
+  if (skippedNoMeta.length)       msg += `\n${skippedNoMeta.length} skipped (no metadata).`;
+  if (skippedAlreadyNamed.length) msg += `\n${skippedAlreadyNamed.length} already correctly named.`;
+  msg += '\n\nProceed?';
+  if (!confirm(msg)) return;
+
+  let successCount = 0;
+  for (const { photo, newName } of renames) {
+    const ok = await renamePhoto(photo, newName); // updates photo.name in-place
+    if (ok) successCount++;
+  }
+
+  // Update selectedPhotos to use new names (photo.name updated in-place by renamePhoto)
+  selectedPhotos.clear();
+  for (const { photo } of renames)        selectedPhotos.add(photo.name);
+  for (const name of skippedNoMeta)       selectedPhotos.add(name);
+  for (const name of skippedAlreadyNamed) selectedPhotos.add(name);
+
+  updateBulkEditorState();
+  applyFilters();
+  setStatus(`Bulk rename: ${successCount} of ${renames.length} photos renamed`);
+  appendLog('INFO', `Bulk auto-rename: ${successCount} renamed`);
+}
+
+async function bulkRevertNames() {
+  const allTargets = [...selectedPhotos].map(name => photos.find(p => p.name === name)).filter(Boolean);
+  const targets = allTargets.filter(p => metadata[p.name]?.original_name);
+  const skippedPhotos = allTargets.filter(p => !metadata[p.name]?.original_name);
+  const skipped = skippedPhotos.length;
+
+  if (!targets.length) {
+    alert('None of the selected photos have a recorded original name to revert to.');
+    return;
+  }
+
+  let msg = `Revert filenames for ${targets.length} photo${targets.length !== 1 ? 's' : ''} to their original names?`;
+  if (skipped) msg += `\n${skipped} selected photo${skipped !== 1 ? 's have' : ' has'} no original name and will be skipped.`;
+  msg += '\n\nProceed?';
+  if (!confirm(msg)) return;
+
+  let successCount = 0;
+  for (const photo of targets) {
+    const origName = metadata[photo.name]?.original_name;
+    if (!origName) continue;
+    const ok = await renamePhoto(photo, origName); // updates photo.name in-place
+    if (ok) {
+      if (metadata[photo.name]) delete metadata[photo.name].original_name;
+      successCount++;
+    }
+  }
+
+  await exportMetadata(true); // persist original_name deletions
+
+  // Update selectedPhotos with reverted names; skipped photos keep current names
+  selectedPhotos.clear();
+  for (const photo of targets)       selectedPhotos.add(photo.name);
+  for (const photo of skippedPhotos) selectedPhotos.add(photo.name);
+
+  updateBulkEditorState();
+  applyFilters();
+  setStatus(`Bulk revert: ${successCount} of ${targets.length} names reverted`);
+  appendLog('INFO', `Bulk revert names: ${successCount} reverted`);
 }
 
 // ─────────────────────────────────────────────────────────────────
