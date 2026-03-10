@@ -407,7 +407,7 @@
   #gridSection.full {
     flex: 1;
     max-height: none;
-    padding: 20px;
+    padding: 0 20px 20px;
   }
 
   /* In strip mode: hide toolbar, make grid a horizontal row */
@@ -448,8 +448,14 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    margin-bottom: 16px;
     flex-wrap: wrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--paper);
+    padding: 16px 20px 12px;
+    margin: 0 -20px 14px;
+    border-bottom: 1px solid rgba(200,146,78,0.15);
   }
   #searchInput {
     font-family: var(--ui-font);
