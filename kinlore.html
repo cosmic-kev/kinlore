@@ -1497,7 +1497,22 @@
           <textarea id="bulkCaptionInput" placeholder="Caption for all selected photos…"></textarea>
           <div style="font-size:0.73rem;color:var(--faded);margin-top:4px;font-style:italic;">Leave blank to keep each photo's existing caption.</div>
         </div>
-        <!-- Rename -->
+        <!-- Auto-rename on save -->
+        <div>
+          <label class="field-label" style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="checkbox" id="bulkAutoRenameOnSave" checked style="width:12px;height:12px;accent-color:var(--sepia);cursor:pointer;flex-shrink:0;" />
+            Auto-rename on save
+          </label>
+          <div style="font-size:0.72rem;color:var(--faded);margin-top:4px;">Automatically rename files when applying metadata.</div>
+        </div>
+        <!-- Actions -->
+        <div class="save-row">
+          <button class="btn btn-accent" id="bulkApplyBtn" disabled>Apply to 0 photos</button>
+          <button class="btn btn-ghost"  id="bulkCancelBtn">Cancel</button>
+        </div>
+        <!-- Divider -->
+        <hr style="border:none;border-top:1px solid rgba(140,100,60,0.15);margin:0;" />
+        <!-- Manual rename -->
         <div>
           <label class="field-label">Rename</label>
           <div class="save-row" style="flex-wrap:wrap;gap:8px;">
@@ -1505,11 +1520,6 @@
             <button class="btn btn-secondary" id="bulkRevertNamesBtn" disabled>Revert names</button>
           </div>
           <div style="font-size:0.72rem;color:var(--faded);margin-top:5px;">Renames files using metadata. Original names are saved and can be reverted.</div>
-        </div>
-        <!-- Actions -->
-        <div class="save-row">
-          <button class="btn btn-accent" id="bulkApplyBtn" disabled>Apply to 0 photos</button>
-          <button class="btn btn-ghost"  id="bulkCancelBtn">Cancel</button>
         </div>
       </div>
     </div>
@@ -3222,7 +3232,7 @@ function showBulkConflictModal(conflicts, targets, addPeople, date, caption) {
   document.getElementById('bulkConflictModal').classList.add('open');
 }
 
-function executeBulkApply(targets, addPeople, date, overwriteDate, caption, overwriteCaption) {
+async function executeBulkApply(targets, addPeople, date, overwriteDate, caption, overwriteCaption) {
   targets.forEach(photo => {
     const ex = metadata[photo.name] || {};
     metadata[photo.name] = {
@@ -3232,6 +3242,9 @@ function executeBulkApply(targets, addPeople, date, overwriteDate, caption, over
       caption: caption ? (overwriteCaption || !ex.caption ? caption : ex.caption) : (ex.caption || '')
     };
   });
+  if (document.getElementById('bulkAutoRenameOnSave').checked) {
+    await silentAutoRename(targets);
+  }
   rebuildPeopleList();
   applyFilters();
   exportMetadata(true);
@@ -3243,6 +3256,34 @@ function executeBulkApply(targets, addPeople, date, overwriteDate, caption, over
 // ─────────────────────────────────────────────────────────────────
 // BULK RENAME
 // ─────────────────────────────────────────────────────────────────
+async function silentAutoRename(targets) {
+  const takenNames = new Set(photos.filter(p => !targets.some(t => t.name === p.name)).map(p => p.name));
+  const renames = [];
+  for (const photo of targets) {
+    const meta = metadata[photo.name] || {};
+    let newName = generatePhotoName(photo, meta);
+    if (!newName || newName === photo.name) continue;
+    if (takenNames.has(newName)) {
+      const dotIdx = newName.lastIndexOf('.');
+      const base = dotIdx !== -1 ? newName.slice(0, dotIdx) : newName;
+      const ext  = dotIdx !== -1 ? newName.slice(dotIdx) : '';
+      let n = 2;
+      do {
+        const suffix = `_${n++}`;
+        newName = base.slice(0, 100 - suffix.length) + suffix + ext;
+      } while (takenNames.has(newName) && n <= 999);
+    }
+    takenNames.add(newName);
+    renames.push({ photo, newName });
+  }
+  let successCount = 0;
+  for (const { photo, newName } of renames) {
+    const ok = await renamePhoto(photo, newName);
+    if (ok) successCount++;
+  }
+  if (successCount) appendLog('INFO', `Auto-rename on save: ${successCount} photo${successCount !== 1 ? 's' : ''} renamed`);
+}
+
 async function bulkAutoRename() {
   const targets = [...selectedPhotos].map(name => photos.find(p => p.name === name)).filter(Boolean);
 
