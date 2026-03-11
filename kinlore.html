@@ -785,6 +785,11 @@
     background: rgba(200,146,78,0.12);
     color: var(--ink);
   }
+  .suggestion-item.suggestion-add {
+    color: var(--sepia);
+    border-top: 1px solid rgba(200,146,78,0.2);
+    font-style: italic;
+  }
 
   /* Partial date input */
   .date-fields {
@@ -2933,7 +2938,11 @@ function onTagKeydown(e) {
     e.preventDefault();
     if (suggestIdx >= 0) {
       const items = tagSuggestions.querySelectorAll('.suggestion-item');
-      if (items[suggestIdx]) commitTag(items[suggestIdx].textContent);
+      const item = items[suggestIdx];
+      if (item) {
+        if (item.dataset.add) commitTag(tagText.value.trim());
+        else commitTag(item.textContent);
+      }
     } else {
       commitTag(tagText.value.trim());
     }
@@ -2964,10 +2973,16 @@ function commitTag(name) {
 }
 
 function showSuggestions(names) {
-  suggestIdx = -1;
-  tagSuggestions.innerHTML = names.map(n => `<div class="suggestion-item">${n}</div>`).join('');
+  suggestIdx = 0;
+  const rawVal = tagText.value.trim();
+  tagSuggestions.innerHTML =
+    names.map((n, i) => `<div class="suggestion-item${i === 0 ? ' active' : ''}">${n}</div>`).join('') +
+    `<div class="suggestion-item suggestion-add" data-add="1">Add "${rawVal}"</div>`;
   tagSuggestions.querySelectorAll('.suggestion-item').forEach(el => {
-    el.addEventListener('mousedown', () => commitTag(el.textContent));
+    el.addEventListener('mousedown', () => {
+      if (el.dataset.add) commitTag(tagText.value.trim());
+      else commitTag(el.textContent);
+    });
   });
   tagSuggestions.style.display = 'block';
 }
@@ -3012,10 +3027,15 @@ function onBulkTagInput() {
   const lower = val.toLowerCase();
   const matches = allPeople.filter(p => p.toLowerCase().startsWith(lower) && !bulkTags.includes(p));
   if (matches.length) {
-    bulkSuggestIdx = -1;
-    bulkTagSuggestions.innerHTML = matches.map(n => `<div class="suggestion-item">${n}</div>`).join('');
+    bulkSuggestIdx = 0;
+    bulkTagSuggestions.innerHTML =
+      matches.map((n, i) => `<div class="suggestion-item${i === 0 ? ' active' : ''}">${n}</div>`).join('') +
+      `<div class="suggestion-item suggestion-add" data-add="1">Add "${val}"</div>`;
     bulkTagSuggestions.querySelectorAll('.suggestion-item').forEach(el => {
-      el.addEventListener('mousedown', () => commitBulkTag(el.textContent));
+      el.addEventListener('mousedown', () => {
+        if (el.dataset.add) commitBulkTag(bulkTagText.value.trim());
+        else commitBulkTag(el.textContent);
+      });
     });
     bulkTagSuggestions.style.display = 'block';
   } else {
@@ -3030,7 +3050,11 @@ function onBulkTagKeydown(e) {
     e.preventDefault();
     if (bulkSuggestIdx >= 0) {
       const items = bulkTagSuggestions.querySelectorAll('.suggestion-item');
-      if (items[bulkSuggestIdx]) commitBulkTag(items[bulkSuggestIdx].textContent);
+      const item = items[bulkSuggestIdx];
+      if (item) {
+        if (item.dataset.add) commitBulkTag(bulkTagText.value.trim());
+        else commitBulkTag(item.textContent);
+      }
     } else {
       commitBulkTag(bulkTagText.value.trim());
     }
