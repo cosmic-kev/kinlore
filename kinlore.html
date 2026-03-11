@@ -1244,7 +1244,6 @@
   <h1>Kin<span>lore</span></h1>
   <div class="header-actions">
     <button class="btn btn-ghost" id="openFolderBtn">Open Folder</button>
-    <button class="btn btn-ghost" id="exportBtn" disabled>Save metadata.json</button>
     <button class="btn btn-ghost" id="exportViewerBtn" disabled>Export</button>
     <button class="btn btn-ghost" id="scanModeBtn" disabled title="Watch folder for new scans">Scan Mode</button>
   </div>
@@ -1595,7 +1594,6 @@ let scanWaiting = false;
 // ─────────────────────────────────────────────────────────────────
 document.getElementById('openFolderBtn').addEventListener('click', openFolder);
 document.getElementById('landingOpenBtn').addEventListener('click', openFolder);
-document.getElementById('exportBtn').addEventListener('click', exportMetadata);
 document.getElementById('exportViewerBtn').addEventListener('click', openExportModal);
 document.getElementById('exportCancelBtn').addEventListener('click', () => document.getElementById('exportModal').classList.remove('open'));
 document.getElementById('exportRunBtn').addEventListener('click', runExport);
@@ -1977,7 +1975,6 @@ async function loadFolder() {
   showApp();
   const gridEl = document.getElementById('photoGrid');
   gridEl.innerHTML = '<div id="gridLoadingMsg"><div class="grid-loading-spinner"></div><span id="gridLoadingCount">Loading…</span></div>';
-  document.getElementById('exportBtn').disabled = false;
   document.getElementById('exportViewerBtn').disabled = false;
   setLoadProgress(0, entries.length);
 
@@ -2030,7 +2027,6 @@ async function loadFolder() {
     setStatus(`Opened: ${dirHandle.name} — ${parts.join(', ')} found.`);
   }
   appendLog('INFO', `Opened folder: ${dirHandle.name} (${nPhotos} photos, ${nVideos} videos, ${Object.keys(metadata).length} tagged)`);
-  document.getElementById('exportBtn').disabled = false;
   document.getElementById('exportViewerBtn').disabled = false;
   document.getElementById('viewLogsBtn').disabled = false;
   document.getElementById('selectModeBtn').disabled = false;
