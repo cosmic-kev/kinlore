@@ -1197,6 +1197,44 @@
     #appLayout { grid-template-columns: 1fr; }
     #editorPanel { border-left: none; border-top: 1px solid var(--sepia); }
   }
+
+  /* ── Scan Mode ── */
+  #scanModeBtn.active {
+    background: var(--sepia);
+    color: #fff;
+    border-color: var(--sepia);
+  }
+  #scanWaitingOverlay {
+    position: absolute;
+    inset: 0;
+    background: var(--paper);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5;
+  }
+  .scan-waiting-content {
+    text-align: center;
+    color: var(--ink);
+    font-family: 'Lora', Georgia, serif;
+  }
+  .scan-waiting-content p {
+    font-size: 1.1rem;
+    margin: 18px 0;
+    color: var(--sepia);
+  }
+  .scan-pulse {
+    width: 16px;
+    height: 16px;
+    background: var(--sepia);
+    border-radius: 50%;
+    margin: 0 auto;
+    animation: scanPulse 1.5s ease-in-out infinite;
+  }
+  @keyframes scanPulse {
+    0%, 100% { opacity: 0.3; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1.2); }
+  }
 </style>
 </head>
 <body>
@@ -1208,6 +1246,7 @@
     <button class="btn btn-ghost" id="openFolderBtn">Open Folder</button>
     <button class="btn btn-ghost" id="exportBtn" disabled>Save metadata.json</button>
     <button class="btn btn-ghost" id="exportViewerBtn" disabled>Export</button>
+    <button class="btn btn-ghost" id="scanModeBtn" disabled title="Watch folder for new scans">Scan Mode</button>
   </div>
 </header>
 
@@ -1318,6 +1357,13 @@
         <div id="previewNavBtns">
           <button id="prevPhotoBtn" title="Previous photo (←)">&#8249;</button>
           <button id="nextPhotoBtn" title="Next photo (→)">&#8250;</button>
+        </div>
+        <div id="scanWaitingOverlay" style="display:none">
+          <div class="scan-waiting-content">
+            <div class="scan-pulse"></div>
+            <p>Waiting for next scan&hellip;</p>
+            <button class="btn btn-ghost" id="scanStopBtn">Stop Scanning</button>
+          </div>
         </div>
       </div>
       <!-- Grid section (becomes a compact strip when preview is open) -->
@@ -1538,6 +1584,11 @@ let pvDragStartX = 0;
 let pvDragStartY = 0;
 let pvDragOriginX = 0;
 let pvDragOriginY = 0;
+let scanMode = false;
+let scanPollTimer = null;
+let scanKnownFiles = new Set();
+let scanQueue = [];
+let scanWaiting = false;
 
 // ─────────────────────────────────────────────────────────────────
 // INIT
@@ -1548,6 +1599,8 @@ document.getElementById('exportBtn').addEventListener('click', exportMetadata);
 document.getElementById('exportViewerBtn').addEventListener('click', openExportModal);
 document.getElementById('exportCancelBtn').addEventListener('click', () => document.getElementById('exportModal').classList.remove('open'));
 document.getElementById('exportRunBtn').addEventListener('click', runExport);
+document.getElementById('scanModeBtn').addEventListener('click', toggleScanMode);
+document.getElementById('scanStopBtn').addEventListener('click', stopScanMode);
 document.querySelectorAll('input[name="exportDest"]').forEach(r => r.addEventListener('change', () => {
   document.getElementById('exportPhotosRow').style.display = document.querySelector('input[name="exportDest"]:checked').value === 'other' ? '' : 'none';
 }));
@@ -1697,6 +1750,7 @@ document.addEventListener('keydown', e => {
     resetLbZoom(); document.getElementById('lightboxVideo').pause(); document.getElementById('lightboxVideo').src = ''; document.getElementById('lightbox').classList.remove('open'); return;
   }
   if (e.key === 'Escape' && bulkSelectMode) { exitSelectMode(); return; }
+  if (e.key === 'Escape' && scanMode && scanWaiting) { stopScanMode(); return; }
   if (bulkSelectMode && !e.ctrlKey && !e.altKey && !e.metaKey && e.key.length === 1) {
     const activeTag = document.activeElement?.tagName;
     if (activeTag !== 'INPUT' && activeTag !== 'TEXTAREA' && activeTag !== 'SELECT') {
@@ -1862,6 +1916,7 @@ async function openFolder() {
 }
 
 async function loadFolder() {
+  if (scanMode) stopScanMode();
   photos = [];
   metadata = {};
   metaFileHandle = null;
@@ -1979,6 +2034,7 @@ async function loadFolder() {
   document.getElementById('exportViewerBtn').disabled = false;
   document.getElementById('viewLogsBtn').disabled = false;
   document.getElementById('selectModeBtn').disabled = false;
+  document.getElementById('scanModeBtn').disabled = false;
 }
 
 
@@ -2331,6 +2387,13 @@ function closePreview() {
   // Pause any playing video
   const vid = document.getElementById('fullPreviewVideo');
   vid.pause(); vid.src = '';
+  // In scan mode, show waiting state instead of returning to grid
+  if (scanMode) {
+    currentPhoto = null;
+    isDirty = false;
+    showScanWaiting();
+    return;
+  }
   // Return to full grid view
   document.getElementById('fullPreviewPane').classList.remove('visible');
   document.getElementById('gridSection').classList.remove('strip');
@@ -2347,8 +2410,168 @@ function saveAndNext() {
   const idx = filteredPhotos.findIndex(p => p.name === currentPhoto?.name);
   const next = (idx !== -1 && idx < filteredPhotos.length - 1) ? filteredPhotos[idx + 1] : null;
   if (!saveCurrentPhoto()) return false;
+  if (scanMode) {
+    if (scanQueue.length > 0) presentNextScan();
+    else showScanWaiting();
+    return true;
+  }
   if (next) selectPhoto(next);
   return true;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// SCAN MODE
+// ─────────────────────────────────────────────────────────────────
+function toggleScanMode() {
+  if (scanMode) stopScanMode();
+  else startScanMode();
+}
+
+function startScanMode() {
+  scanMode = true;
+  document.getElementById('scanModeBtn').classList.add('active');
+  // Snapshot all known filenames
+  scanKnownFiles = new Set(photos.map(p => p.name));
+  scanQueue = [];
+  appendLog('INFO', 'Scan mode started');
+  // If no photo is open, show the waiting overlay
+  if (!currentPhoto) showScanWaiting();
+  // Start polling
+  scanPollTimer = setInterval(scanPoll, 1500);
+}
+
+function stopScanMode() {
+  if (scanPollTimer) { clearInterval(scanPollTimer); scanPollTimer = null; }
+  scanMode = false;
+  scanQueue = [];
+  document.getElementById('scanModeBtn').classList.remove('active');
+  hideScanWaiting();
+  // If in waiting state with no photo, return to grid
+  if (!currentPhoto) {
+    document.getElementById('fullPreviewPane').classList.remove('visible');
+    document.getElementById('gridSection').classList.remove('strip');
+    document.getElementById('gridSection').classList.add('full');
+  }
+  appendLog('INFO', 'Scan mode stopped');
+}
+
+async function scanPoll() {
+  if (!dirHandle || !scanMode) return;
+  const newEntries = [];
+  try {
+    for await (const entry of dirHandle.values()) {
+      if (entry.kind !== 'file') continue;
+      if (scanKnownFiles.has(entry.name)) continue;
+      if (photos.find(p => p.name === entry.name)) continue;
+      const ext = entry.name.substring(entry.name.lastIndexOf('.')).toLowerCase();
+      const ALL_EXTS = new Set([...IMAGE_EXTS, ...VIDEO_EXTS]);
+      if (!ALL_EXTS.has(ext)) continue;
+      newEntries.push(entry);
+    }
+  } catch (e) { return; }
+
+  for (const entry of newEntries) {
+    scanKnownFiles.add(entry.name);
+    const ext = entry.name.substring(entry.name.lastIndexOf('.')).toLowerCase();
+    const type = VIDEO_EXTS.has(ext) ? 'video' : 'photo';
+    const photo = { name: entry.name, thumbUrl: null, fullUrl: null, fileHandle: entry, thumbHandle: null, type };
+
+    // Try to generate a thumbnail on the fly
+    try {
+      const file = await entry.getFile();
+      const url = URL.createObjectURL(file);
+      let thumbBlob;
+      if (type === 'video') {
+        thumbBlob = await captureVideoFrame(url);
+      } else {
+        thumbBlob = await generateSingleThumb(url);
+      }
+      URL.revokeObjectURL(url);
+      if (thumbBlob && thumbsDirHandle) {
+        const thumbName = (type === 'video' ? 'v_' : '') + entry.name.replace(/\.[^.]+$/, '.jpg');
+        const thumbHandle = await thumbsDirHandle.getFileHandle(thumbName, { create: true });
+        const writable = await thumbHandle.createWritable();
+        await writable.write(thumbBlob);
+        await writable.close();
+        photo.thumbHandle = thumbHandle;
+        const thumbFile = await thumbHandle.getFile();
+        photo.thumbUrl = URL.createObjectURL(thumbFile);
+      }
+    } catch (e) {
+      console.warn('Scan thumb generation failed for', entry.name, e);
+    }
+
+    photos.push(photo);
+    scanQueue.push(photo);
+    appendLog('INFO', `Scan detected: ${entry.name}`);
+  }
+
+  if (scanQueue.length > 0 && scanWaiting) {
+    presentNextScan();
+  }
+}
+
+function generateSingleThumb(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        const THUMB_MAX = 400;
+        let w = img.naturalWidth, h = img.naturalHeight;
+        if (w > THUMB_MAX || h > THUMB_MAX) {
+          const scale = THUMB_MAX / Math.max(w, h);
+          w = Math.round(w * scale); h = Math.round(h * scale);
+        }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        canvas.toBlob(blob => resolve(blob), 'image/jpeg', 0.85);
+      } catch (e) { reject(e); }
+    };
+    img.onerror = () => reject(new Error('Image load failed'));
+    img.src = url;
+  });
+}
+
+function presentNextScan() {
+  if (scanQueue.length === 0) return;
+  const photo = scanQueue.shift();
+  hideScanWaiting();
+  applyFilters();
+  selectPhoto(photo);
+}
+
+function showScanWaiting() {
+  scanWaiting = true;
+  currentPhoto = null;
+  isDirty = false;
+  // Open the preview pane in waiting state
+  const previewPane = document.getElementById('fullPreviewPane');
+  previewPane.classList.add('visible');
+  document.getElementById('gridSection').classList.remove('full');
+  document.getElementById('gridSection').classList.add('strip');
+  // Hide image/video, show overlay
+  document.getElementById('fullPreviewImg').style.display = 'none';
+  document.getElementById('fullPreviewVideo').style.display = 'none';
+  document.getElementById('fullPreviewFilename').textContent = '';
+  document.getElementById('previewNavBtns').style.display = 'none';
+  document.getElementById('closePreviewBtn').style.display = 'none';
+  document.getElementById('scanWaitingOverlay').style.display = '';
+  // Hide editor content, show placeholder
+  document.getElementById('editorPlaceholder').style.display = '';
+  document.getElementById('editorContent').style.display = 'none';
+  document.getElementById('editorPlaceholderText').textContent = 'Waiting for next scan…';
+}
+
+function hideScanWaiting() {
+  scanWaiting = false;
+  document.getElementById('scanWaitingOverlay').style.display = 'none';
+  document.getElementById('fullPreviewImg').style.display = '';
+  document.getElementById('previewNavBtns').style.display = '';
+  document.getElementById('closePreviewBtn').style.display = '';
+  // Restore placeholder text
+  const noun = mediaMode === 'video' ? 'video' : 'photo';
+  document.getElementById('editorPlaceholderText').textContent = `Select a ${noun} from the grid to tag it.`;
 }
 
 function discardChanges() {
@@ -2853,6 +3076,7 @@ function commitBulkTag(name) {
 // BULK SELECT
 // ─────────────────────────────────────────────────────────────────
 function enterSelectMode() {
+  if (scanMode) stopScanMode();
   if (currentPhoto) closePreview();
   bulkSelectMode = true;
   selectedPhotos.clear();
