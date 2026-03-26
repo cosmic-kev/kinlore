@@ -127,15 +127,14 @@
   }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
-  /* ── Landing ── */
+  /* ── Landing / Collection Manager ── */
   #landing {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    padding: 72px 24px;
+    padding: 48px 24px;
     text-align: center;
-    gap: 28px;
+    gap: 24px;
     flex: 1;
     overflow-y: auto;
   }
@@ -155,36 +154,105 @@
     line-height: 1.2;
   }
   #landing p {
-    max-width: 440px;
+    max-width: 500px;
     color: var(--ink-light);
     line-height: 1.75;
     font-size: 0.93rem;
   }
-  .steps {
+  #landing .landing-actions {
     display: flex;
-    gap: 16px;
-    margin-top: 8px;
+    gap: 12px;
     flex-wrap: wrap;
     justify-content: center;
   }
-  .step {
+  .collection-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+    width: 100%;
+    max-width: 860px;
+    margin-top: 8px;
+  }
+  .collection-card {
     background: var(--paper);
     border: 1px solid rgba(200,146,78,0.35);
     border-radius: var(--radius);
-    padding: 20px 20px;
-    max-width: 190px;
+    padding: 20px 22px;
     text-align: left;
     box-shadow: 0 2px 8px var(--shadow);
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
   }
-  .step .num {
+  .collection-card:hover {
+    border-color: var(--sepia);
+    box-shadow: 0 4px 16px var(--shadow);
+    transform: translateY(-1px);
+  }
+  .collection-card .cc-name {
     font-family: 'Playfair Display', serif;
-    font-size: 1.5rem;
-    color: var(--sepia);
-    line-height: 1;
-    margin-bottom: 8px;
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 6px;
+    line-height: 1.3;
+  }
+  .collection-card .cc-folder {
+    font-size: 0.78rem;
+    color: var(--faded);
+    margin-bottom: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .collection-card .cc-date {
+    font-size: 0.72rem;
+    color: var(--faded);
     font-style: italic;
   }
-  .step p { font-size: 0.82rem; color: var(--ink-light); margin: 0; line-height: 1.55; }
+  .collection-card .cc-delete {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    background: none;
+    border: none;
+    color: var(--faded);
+    font-size: 1.1rem;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .collection-card:hover .cc-delete { opacity: 1; }
+  .collection-card .cc-delete:hover { color: var(--accent); background: rgba(139,58,30,0.1); }
+  .collection-card.cc-error {
+    border-color: var(--accent);
+    opacity: 0.75;
+  }
+  .collection-card.cc-error .cc-name::before {
+    content: '⚠ ';
+    color: var(--accent);
+  }
+  #emptyCollections {
+    color: var(--faded);
+    font-style: italic;
+    font-size: 0.9rem;
+    padding: 20px;
+  }
+  .export-col-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 0.86rem;
+  }
+  .export-col-item input[type=checkbox] {
+    accent-color: var(--accent);
+    width: 15px; height: 15px;
+  }
+  .export-col-item .col-name { color: var(--ink); }
+  .export-col-item .col-folder { color: var(--faded); font-size: 0.76rem; margin-left: 4px; }
 
   /* ── Main layout ── */
   #app { display: none; flex: 1; flex-direction: column; min-height: 0; }
@@ -1040,6 +1108,16 @@
   .modal-radio-label small { display: block; color: var(--faded); font-size: 0.76rem; font-style: italic; }
   #exportPhotosRow { margin-top: 4px; margin-left: 25px; }
 
+  .modal-overlay {
+    position: fixed;
+    top: 0; right: 0; bottom: 0; left: 0;
+    background: rgba(20,12,5,0.85);
+    z-index: 300;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
   /* ── Open Folder Modal ── */
   #folderModal {
     display: none;
@@ -1248,7 +1326,8 @@
 <header>
   <h1>Kin<span>lore</span></h1>
   <div class="header-actions">
-    <button class="btn btn-ghost" id="openFolderBtn">Open Folder</button>
+    <button class="btn btn-ghost" id="homeBtn" style="display:none;" title="Back to collections">Home</button>
+    <button class="btn btn-ghost" id="openFolderBtn" style="display:none;">Open Folder</button>
     <button class="btn btn-ghost" id="exportViewerBtn" disabled>Export</button>
     <button class="btn btn-ghost" id="scanModeBtn" disabled title="Watch folder for new scans">Scan Mode</button>
   </div>
@@ -1264,18 +1343,43 @@
   <div id="loadProgressBar"></div>
 </div>
 
-<!-- Landing screen -->
+<!-- Landing screen / Collection Manager -->
 <div id="landing">
   <div class="ornament">✦</div>
-  <h2>Organize Your Family Memories</h2>
-  <p>Tag people, add dates, and build a searchable archive from your scanned photos. Your work saves as a simple <em>metadata.json</em> file alongside your photos.</p>
-  <div class="steps">
-    <div class="step"><div class="num">1</div><p>Click <strong>Open Folder</strong> — you'll be offered the option to generate thumbnails automatically.</p></div>
-    <div class="step"><div class="num">2</div><p>Click <strong>Open Folder</strong> and select your photos folder.</p></div>
-    <div class="step"><div class="num">3</div><p>Click any photo to tag people and add a date.</p></div>
-    <div class="step"><div class="num">4</div><p>Click <strong>Save metadata.json</strong> when done or periodically.</p></div>
+  <h2>Your Collections</h2>
+  <p>Tag people, add dates, and build a searchable archive from your scanned photos.</p>
+  <div class="landing-actions">
+    <button class="btn btn-accent" style="font-size:0.95rem;padding:10px 28px;" id="newCollectionBtn">New Collection</button>
+    <button class="btn btn-secondary" style="font-size:0.95rem;padding:10px 28px;" id="landingOpenBtn">Open Folder</button>
   </div>
-  <button class="btn btn-accent" style="margin-top:8px;font-size:1rem;padding:12px 32px;" id="landingOpenBtn">Open Photos Folder</button>
+  <div class="collection-grid" id="collectionGrid">
+    <div id="emptyCollections">No collections yet. Create one to get started.</div>
+  </div>
+</div>
+
+<!-- New Collection Modal -->
+<div id="newCollectionModal" class="modal-overlay" style="display:none;">
+  <div class="modal-box" style="max-width:400px;">
+    <h3>New Collection</h3>
+    <label class="modal-label" style="margin-top:12px;">Collection Name</label>
+    <input type="text" class="modal-input" id="newCollectionName" placeholder="e.g. Grandma's Photos" autocomplete="off" />
+    <div class="modal-actions" style="margin-top:18px;">
+      <button class="btn btn-secondary" id="newCollectionCancelBtn">Cancel</button>
+      <button class="btn btn-accent" id="newCollectionCreateBtn">Choose Folder &amp; Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Relocate Collection Modal -->
+<div id="relocateModal" class="modal-overlay" style="display:none;">
+  <div class="modal-box" style="max-width:420px;">
+    <h3>Collection Not Found</h3>
+    <p style="margin:12px 0;color:var(--ink-light);font-size:0.88rem;" id="relocateMsg">The folder for this collection could not be accessed. Select the new location.</p>
+    <div class="modal-actions" style="margin-top:18px;">
+      <button class="btn btn-secondary" id="relocateCancelBtn">Cancel</button>
+      <button class="btn btn-accent" id="relocatePickBtn">Pick New Folder</button>
+    </div>
+  </div>
 </div>
 
 
@@ -1308,6 +1412,10 @@
   <div class="modal-box">
     <h3>Export Viewer</h3>
     <div class="modal-folder-name" id="exportFolderName"></div>
+    <div id="exportCollectionPicker" style="margin-bottom:14px;">
+      <label class="modal-label">Include collections</label>
+      <div id="exportCollectionList"></div>
+    </div>
     <label class="modal-label">Viewer title</label>
     <input type="text" class="modal-input" id="exportTitle" placeholder="e.g. The Johnson Family" />
     <div class="modal-radio-group">
@@ -1603,12 +1711,302 @@ let scanPollTimer = null;
 let scanKnownFiles = new Set();
 let scanQueue = [];
 let scanWaiting = false;
+let currentCollection = null; // { id, name, directoryHandle, createdAt }
+
+// ─────────────────────────────────────────────────────────────────
+// INDEXEDDB — collection persistence
+// ─────────────────────────────────────────────────────────────────
+function dbOpen() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('kinlore', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('collections', { keyPath: 'id', autoIncrement: true });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbGetAll() {
+  const db = await dbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('collections', 'readonly');
+    const req = tx.objectStore('collections').getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbGet(id) {
+  const db = await dbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('collections', 'readonly');
+    const req = tx.objectStore('collections').get(id);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbAdd(record) {
+  const db = await dbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('collections', 'readwrite');
+    const req = tx.objectStore('collections').add(record);
+    req.onsuccess = () => resolve(req.result); // returns new id
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbDelete(id) {
+  const db = await dbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('collections', 'readwrite');
+    const req = tx.objectStore('collections').delete(id);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+async function dbUpdate(id, changes) {
+  const db = await dbOpen();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('collections', 'readwrite');
+    const store = tx.objectStore('collections');
+    const getReq = store.get(id);
+    getReq.onsuccess = () => {
+      const record = { ...getReq.result, ...changes };
+      const putReq = store.put(record);
+      putReq.onsuccess = () => resolve(record);
+      putReq.onerror = () => reject(putReq.error);
+    };
+    getReq.onerror = () => reject(getReq.error);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// STATE RESET — clean slate between collections
+// ─────────────────────────────────────────────────────────────────
+function resetAppState() {
+  // Stop scan mode
+  if (scanMode) stopScanMode();
+
+  // Revoke all object URLs
+  for (const p of photos) {
+    if (p.thumbUrl) URL.revokeObjectURL(p.thumbUrl);
+    if (p.fullUrl) URL.revokeObjectURL(p.fullUrl);
+  }
+  preloadCache.clear();
+
+  // Reset data
+  photos = [];
+  metadata = {};
+  filteredPhotos = [];
+  allPeople = [];
+  currentPhoto = null;
+  currentTags = [];
+  isDirty = false;
+  selectedPeople = new Set();
+  suggestIdx = -1;
+
+  // Reset bulk edit
+  bulkSelectMode = false;
+  selectedPhotos = new Set();
+  bulkTags = [];
+  lastBulkClickedName = null;
+  bulkSuggestIdx = -1;
+
+  // Reset handles
+  dirHandle = null;
+  thumbsDirHandle = null;
+  kinloreDirHandle = null;
+  logsDirHandle = null;
+  logFileHandle = null;
+  metaFileHandle = null;
+  currentCollection = null;
+
+  // Reset zoom/pan
+  lbScale = 1; lbOffsetX = 0; lbOffsetY = 0;
+  pvScale = 1; pvOffsetX = 0; pvOffsetY = 0;
+
+  // Reset UI
+  document.getElementById('photoGrid').innerHTML = '<div id="emptyGrid">No photos found in this folder.</div>';
+  document.getElementById('fullPreviewPane').classList.remove('visible');
+  document.getElementById('gridSection').classList.remove('strip');
+  document.getElementById('gridSection').classList.add('full');
+  document.getElementById('editorPlaceholder').style.display = '';
+  document.getElementById('editorContent').style.display = 'none';
+  document.getElementById('searchInput').value = '';
+  document.getElementById('filterTagged').value = '';
+  document.getElementById('exportViewerBtn').disabled = true;
+  document.getElementById('selectModeBtn').disabled = true;
+  document.getElementById('scanModeBtn').disabled = true;
+  document.getElementById('viewLogsBtn').disabled = true;
+  document.querySelectorAll('.photo-card').forEach(c => c.classList.remove('selected'));
+
+  // Reset filter pills
+  const filterSelect = document.getElementById('filterPersonSelect');
+  filterSelect.innerHTML = '<option value="" disabled selected>Filter by person…</option>';
+  document.querySelectorAll('#filterPeopleWrap .person-pill').forEach(p => p.remove());
+
+  mediaMode = 'photo';
+  document.querySelectorAll('.mode-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === 'photo');
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// COLLECTION MANAGER
+// ─────────────────────────────────────────────────────────────────
+
+async function renderCollectionGrid() {
+  const grid = document.getElementById('collectionGrid');
+  let collections;
+  try { collections = await dbGetAll(); } catch { collections = []; }
+  if (collections.length === 0) {
+    grid.innerHTML = '<div id="emptyCollections">No collections yet. Create one to get started.</div>';
+    return;
+  }
+  grid.innerHTML = '';
+  for (const col of collections) {
+    const card = document.createElement('div');
+    card.className = 'collection-card';
+    card.innerHTML = `
+      <div class="cc-name">${escapeHtml(col.name)}</div>
+      <div class="cc-folder">${escapeHtml(col.directoryHandle?.name || '(unknown)')}</div>
+      <div class="cc-date">Created ${new Date(col.createdAt).toLocaleDateString()}</div>
+      <button class="cc-delete" title="Delete collection">&times;</button>
+    `;
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.cc-delete')) return;
+      openCollection(col.id);
+    });
+    card.querySelector('.cc-delete').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!confirm(`Delete collection "${col.name}"?\n\nThis only removes it from Kinlore — your photos and metadata on disk are not affected.`)) return;
+      await dbDelete(col.id);
+      renderCollectionGrid();
+    });
+    grid.appendChild(card);
+  }
+}
+
+async function openCollection(id) {
+  const col = await dbGet(id);
+  if (!col) { showToast('Collection not found.', 'error'); return; }
+
+  try {
+    const perm = await col.directoryHandle.requestPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') throw new Error('Permission denied');
+  } catch (e) {
+    // Show relocate modal
+    showRelocateModal(col);
+    return;
+  }
+
+  resetAppState();
+  currentCollection = col;
+  _pendingDirHandle = col.directoryHandle;
+
+  // Go straight to the folder open modal (photo count, thumb check, etc.)
+  await openFolderWithHandle(_pendingDirHandle);
+}
+
+let _relocatingCollection = null;
+
+function showRelocateModal(col) {
+  _relocatingCollection = col;
+  document.getElementById('relocateMsg').textContent =
+    `The folder for "${col.name}" could not be accessed. Select the new location.`;
+  document.getElementById('relocateModal').style.display = '';
+}
+
+document.getElementById('relocateCancelBtn').addEventListener('click', () => {
+  document.getElementById('relocateModal').style.display = 'none';
+  _relocatingCollection = null;
+});
+document.getElementById('relocateModal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) { e.currentTarget.style.display = 'none'; _relocatingCollection = null; }
+});
+
+document.getElementById('newCollectionModal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
+});
+
+document.getElementById('relocatePickBtn').addEventListener('click', async () => {
+  if (!_relocatingCollection) return;
+  try {
+    const newHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    await dbUpdate(_relocatingCollection.id, { directoryHandle: newHandle });
+    document.getElementById('relocateModal').style.display = 'none';
+    openCollection(_relocatingCollection.id);
+    _relocatingCollection = null;
+  } catch (e) {
+    if (e.name !== 'AbortError') showToast('Could not select folder: ' + e.message, 'error');
+  }
+});
+
+// New Collection flow
+document.getElementById('newCollectionBtn').addEventListener('click', () => {
+  document.getElementById('newCollectionName').value = '';
+  document.getElementById('newCollectionModal').style.display = '';
+  document.getElementById('newCollectionName').focus();
+});
+
+document.getElementById('newCollectionCancelBtn').addEventListener('click', () => {
+  document.getElementById('newCollectionModal').style.display = 'none';
+});
+
+document.getElementById('newCollectionName').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('newCollectionCreateBtn').click();
+});
+
+document.getElementById('newCollectionCreateBtn').addEventListener('click', async () => {
+  const name = document.getElementById('newCollectionName').value.trim();
+  if (!name) {
+    document.getElementById('newCollectionName').focus();
+    return;
+  }
+  let handle;
+  try {
+    handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+  } catch (e) {
+    if (e.name !== 'AbortError') showToast('Could not select folder: ' + e.message, 'error');
+    return;
+  }
+  const id = await dbAdd({ name, directoryHandle: handle, createdAt: new Date().toISOString() });
+  document.getElementById('newCollectionModal').style.display = 'none';
+  openCollection(id);
+});
+
+// Home button — return to collection manager
+document.getElementById('homeBtn').addEventListener('click', async () => {
+  if (currentPhoto && isDirty) saveCurrentPhoto();
+  resetAppState();
+  showHome();
+});
+
+function showHome() {
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('landing').style.display = '';
+  document.getElementById('homeBtn').style.display = 'none';
+  document.getElementById('openFolderBtn').style.display = 'none';
+  setStatus('No folder open. Select a collection to begin.');
+  renderCollectionGrid();
+}
+
+function showApp() {
+  document.getElementById('landing').style.display = 'none';
+  const app = document.getElementById('app');
+  app.style.display = '';
+  app.classList.add('visible');
+  document.getElementById('homeBtn').style.display = '';
+  document.getElementById('openFolderBtn').style.display = '';
+}
+
+// "Open Folder" (quick open — not a saved collection)
+document.getElementById('landingOpenBtn').addEventListener('click', openFolder);
+
+// Init: render collection grid on page load
+renderCollectionGrid();
 
 // ─────────────────────────────────────────────────────────────────
 // INIT
 // ─────────────────────────────────────────────────────────────────
 document.getElementById('openFolderBtn').addEventListener('click', openFolder);
-document.getElementById('landingOpenBtn').addEventListener('click', openFolder);
 document.getElementById('exportViewerBtn').addEventListener('click', openExportModal);
 document.getElementById('exportCancelBtn').addEventListener('click', () => document.getElementById('exportModal').classList.remove('open'));
 document.getElementById('exportRunBtn').addEventListener('click', runExport);
@@ -1862,6 +2260,15 @@ document.getElementById('modalOpenBtn').addEventListener('click', async () => {
   }
 
   document.getElementById('folderModal').classList.remove('open');
+
+  // If opened via "Open Folder" (not a saved collection), auto-save as collection
+  if (_pendingSaveAsCollection) {
+    _pendingSaveAsCollection = false;
+    const name = dirHandle.name;
+    const id = await dbAdd({ name, directoryHandle: dirHandle, createdAt: new Date().toISOString() });
+    currentCollection = await dbGet(id);
+  }
+
   await loadFolder();
   btn.disabled = false;
   btn.textContent = 'Open Photos';
@@ -1874,6 +2281,17 @@ async function openFolder() {
     if (e.name !== 'AbortError') { setStatus('Could not open folder: ' + e.message); appendLog('ERROR', 'Could not open folder: ' + e.message); }
     return;
   }
+  // If opened from landing (no collection), offer to save as collection
+  if (!currentCollection) {
+    _pendingSaveAsCollection = true;
+  }
+  await openFolderWithHandle(_pendingDirHandle);
+}
+
+let _pendingSaveAsCollection = false;
+
+async function openFolderWithHandle(handle) {
+  _pendingDirHandle = handle;
 
   // Scan what's in the folder to populate modal
   let photoCount = 0;
@@ -1883,10 +2301,10 @@ async function openFolder() {
   let metaCount = 0;
 
   // Check _kinlore/ subdir first, fall back to root for backward compatibility
-  try { await _pendingDirHandle.getDirectoryHandle('_kinlore').then(d => d.getDirectoryHandle('thumbs')); hasThumbs = true; } catch {}
-  if (!hasThumbs) { try { await _pendingDirHandle.getDirectoryHandle('thumbs'); hasThumbs = true; } catch {} }
+  try { await handle.getDirectoryHandle('_kinlore').then(d => d.getDirectoryHandle('thumbs')); hasThumbs = true; } catch {}
+  if (!hasThumbs) { try { await handle.getDirectoryHandle('thumbs'); hasThumbs = true; } catch {} }
   try {
-    const kinloreDir = await _pendingDirHandle.getDirectoryHandle('_kinlore');
+    const kinloreDir = await handle.getDirectoryHandle('_kinlore');
     const mf = await kinloreDir.getFileHandle('metadata.json');
     const txt = await (await mf.getFile()).text();
     const md = JSON.parse(txt);
@@ -1895,7 +2313,7 @@ async function openFolder() {
   } catch {}
   if (!hasMetadata) {
     try {
-      const mf = await _pendingDirHandle.getFileHandle('metadata.json');
+      const mf = await handle.getFileHandle('metadata.json');
       const txt = await (await mf.getFile()).text();
       const md = JSON.parse(txt);
       metaCount = Object.values(md).filter(m => (m.people?.length > 0) || m.date || m.caption).length;
@@ -1903,7 +2321,7 @@ async function openFolder() {
     } catch {}
   }
 
-  for await (const entry of _pendingDirHandle.values()) {
+  for await (const entry of handle.values()) {
     if (entry.kind === 'file') {
       const ext = entry.name.substring(entry.name.lastIndexOf('.')).toLowerCase();
       if (IMAGE_EXTS.has(ext)) photoCount++;
@@ -1911,7 +2329,7 @@ async function openFolder() {
     }
   }
 
-  document.getElementById('modalFolderName').textContent = _pendingDirHandle.name;
+  document.getElementById('modalFolderName').textContent = handle.name;
   document.getElementById('modalStat').innerHTML =
     `<strong>${photoCount}</strong> photo${photoCount !== 1 ? 's' : ''}` +
     (videoCount > 0 ? ` · <strong>${videoCount}</strong> video${videoCount !== 1 ? 's' : ''}` : '') +
@@ -2076,13 +2494,6 @@ async function ensureFullUrl(photo) {
 // ─────────────────────────────────────────────────────────────────
 // UI SWITCHES
 // ─────────────────────────────────────────────────────────────────
-function showApp() {
-  document.getElementById('landing').style.display = 'none';
-  const app = document.getElementById('app');
-  app.style.display = '';
-  app.classList.add('visible');
-}
-
 let _statusTimer = null;
 function setStatus(msg) {
   document.getElementById('statusText').textContent = msg;
@@ -3843,56 +4254,378 @@ if (!('showDirectoryPicker' in window)) {
 // ─────────────────────────────────────────────────────────────────
 const VIEWER_TEMPLATE = "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\"/>\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1.0\"/>\n<title>Family Photos</title>\n<style>\n  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Lora:ital,wght@0,400;0,500;1,400&display=swap');\n\n  :root {\n    --ink:        #1e1309;\n    --ink-mid:    #4a3728;\n    --ink-light:  #7a6050;\n    --paper:      #f8f0e3;\n    --paper-mid:  #ede0cc;\n    --paper-dark: #e0cdb5;\n    --sepia:      #c9a86c;\n    --sepia-dark: #9a7840;\n    --accent:     #7b3f2a;\n    --shadow:     rgba(30,19,9,0.22);\n    --green:      #5a8a5a;\n  }\n  *, *::before, *::after { box-sizing: border-box; margin:0; padding:0; }\n\n  html { scroll-behavior: smooth; }\n\n  body {\n    background: var(--ink);\n    color: var(--paper);\n    font-family: 'Lora', Georgia, serif;\n    min-height: 100vh;\n  }\n\n  /* \u2500\u2500 Hero Header \u2500\u2500 */\n  #hero {\n    background: var(--ink);\n    padding: 52px 40px 36px;\n    text-align: center;\n    position: relative;\n    overflow: hidden;\n    border-bottom: 2px solid var(--sepia-dark);\n  }\n  #hero::before {\n    content: '';\n    position: absolute;\n    top: 0; right: 0; bottom: 0; left: 0;\n    background:\n      radial-gradient(ellipse at 20% 50%, rgba(201,168,108,0.07) 0%, transparent 60%),\n      radial-gradient(ellipse at 80% 50%, rgba(123,63,42,0.08) 0%, transparent 60%);\n    pointer-events: none;\n  }\n  .hero-ornament {\n    font-family: 'Playfair Display', serif;\n    font-size: 1rem;\n    color: var(--sepia);\n    letter-spacing: 0.4em;\n    text-transform: uppercase;\n    opacity: 0.7;\n    margin-bottom: 14px;\n  }\n  #hero h1 {\n    font-family: 'Playfair Display', serif;\n    font-size: clamp(2rem, 5vw, 3.4rem);\n    font-weight: 700;\n    color: var(--paper);\n    line-height: 1.15;\n    margin-bottom: 10px;\n  }\n  #hero h1 em {\n    font-style: italic;\n    color: var(--sepia);\n  }\n  .hero-sub {\n    color: var(--ink-light);\n    font-size: 0.88rem;\n    font-style: italic;\n    letter-spacing: 0.03em;\n  }\n  .hero-rule {\n    width: 80px;\n    height: 1px;\n    background: var(--sepia);\n    margin: 18px auto;\n    opacity: 0.5;\n  }\n\n  /* \u2500\u2500 Controls \u2500\u2500 */\n  #controls {\n    background: var(--ink-mid);\n    padding: 16px 32px;\n    display: flex;\n    gap: 14px;\n    align-items: center;\n    flex-wrap: wrap;\n    border-bottom: 1px solid rgba(201,168,108,0.2);\n    position: sticky;\n    top: 0;\n    z-index: 50;\n  }\n\n  .filter-wrap {\n    display: flex;\n    flex-wrap: wrap;\n    align-items: center;\n    gap: 5px;\n    background: rgba(255,255,255,0.08);\n    border: 1px solid rgba(201,168,108,0.5);\n    border-radius: 20px;\n    padding: 5px 12px;\n    flex: 1;\n    min-width: 160px;\n  }\n  .filter-pill {\n    display: flex;\n    align-items: center;\n    gap: 3px;\n    background: rgba(201,168,108,0.35);\n    border: 1px solid rgba(201,168,108,0.6);\n    color: var(--paper);\n    font-size: 0.75rem;\n    padding: 2px 4px 2px 9px;\n    border-radius: 20px;\n    font-weight: 600;\n    white-space: nowrap;\n  }\n  .filter-pill button {\n    background: none;\n    border: none;\n    cursor: pointer;\n    color: var(--paper);\n    font-size: 0.85rem;\n    line-height: 1;\n    padding: 0 2px;\n    opacity: 0.6;\n  }\n  .filter-pill button:hover { opacity: 1; }\n  #personSelect {\n    border: none;\n    outline: none;\n    background: transparent;\n    font-size: 0.8rem;\n    color: var(--paper-mid);\n    cursor: pointer;\n    padding: 2px 0;\n    min-width: 110px;\n    flex-shrink: 0;\n  }\n  #personSelect option { background: var(--ink-mid); color: var(--paper); }\n\n  #searchBox {\n    font-family: 'Lora', serif;\n    font-size: 0.82rem;\n    padding: 6px 14px;\n    background: rgba(255,255,255,0.08);\n    border: 1px solid rgba(201,168,108,0.5);\n    border-radius: 20px;\n    color: var(--paper);\n    outline: none;\n    width: 180px;\n    transition: border-color 0.15s;\n  }\n  #searchBox::placeholder { color: rgba(248,240,227,0.4); }\n  #searchBox:focus { border-color: var(--sepia); }\n\n  .photo-count {\n    font-size: 0.75rem;\n    color: var(--paper-mid);\n    margin-left: auto;\n    white-space: nowrap;\n    opacity: 0.7;\n  }\n\n  /* \u2500\u2500 Grid \u2500\u2500 */\n  #main { padding: 28px 24px 60px; }\n\n  #grid {\n    display: grid;\n    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));\n    gap: 18px;\n  }\n\n  .card {\n    background: var(--paper-dark);\n    border-radius: 2px;\n    overflow: hidden;\n    cursor: pointer;\n    box-shadow: 3px 3px 14px var(--shadow), 0 0 0 1px rgba(201,168,108,0.15);\n    transition: transform 0.18s, box-shadow 0.18s;\n    position: relative;\n  }\n  .card:hover {\n    transform: translateY(-4px) scale(1.01);\n    box-shadow: 6px 10px 28px var(--shadow), 0 0 0 1px rgba(201,168,108,0.4);\n  }\n\n  /* Polaroid-style white border */\n  .card-img-wrap {\n    padding: 10px 10px 0;\n    background: var(--paper);\n  }\n  .card img {\n    width: 100%;\n    aspect-ratio: 1;\n    object-fit: cover;\n    display: block;\n    filter: sepia(20%) contrast(1.05) brightness(0.97);\n    transition: filter 0.2s;\n  }\n  .card:hover img { filter: sepia(8%) contrast(1.07) brightness(1.0); }\n\n  .card-body {\n    background: var(--paper);\n    padding: 10px 12px 12px;\n  }\n  .card-caption {\n    font-family: 'Lora', serif;\n    font-size: 0.8rem;\n    color: var(--ink-mid);\n    font-style: italic;\n    line-height: 1.4;\n    margin-bottom: 6px;\n    min-height: 1.1em;\n  }\n  .card-date {\n    font-size: 0.7rem;\n    color: var(--ink-light);\n    margin-bottom: 6px;\n    font-style: italic;\n  }\n  .card-tags {\n    display: flex;\n    flex-wrap: wrap;\n    gap: 4px;\n  }\n  .card-tag {\n    background: var(--sepia-dark);\n    color: var(--paper);\n    font-size: 0.65rem;\n    padding: 2px 8px;\n    border-radius: 20px;\n    letter-spacing: 0.02em;\n  }\n\n  /* \u2500\u2500 Empty state \u2500\u2500 */\n  #empty {\n    display: none;\n    text-align: center;\n    padding: 80px 20px;\n    color: var(--ink-light);\n    font-style: italic;\n    font-size: 0.95rem;\n    grid-column: 1/-1;\n  }\n\n  /* \u2500\u2500 Lightbox \u2500\u2500 */\n  #lb {\n    display: none;\n    position: fixed;\n    top: 0; right: 0; bottom: 0; left: 0;\n    background: rgba(10,6,2,0.96);\n    z-index: 200;\n    align-items: center;\n    justify-content: center;\n    flex-direction: column;\n    gap: 0;\n  }\n  #lb.open { display: flex; }\n\n  #lbClose {\n    position: absolute;\n    top: 16px; right: 20px;\n    background: none; border: none;\n    color: var(--paper-mid);\n    font-size: 1.8rem;\n    cursor: pointer;\n    opacity: 0.6;\n    font-family: serif;\n    line-height: 1;\n    z-index: 10;\n  }\n  #lbClose:hover { opacity: 1; }\n\n  #lbPrev, #lbNext {\n    position: absolute;\n    top: 50%; transform: translateY(-50%);\n    background: rgba(201,168,108,0.15);\n    border: 1px solid rgba(201,168,108,0.3);\n    color: var(--paper);\n    font-size: 1.6rem;\n    width: 44px; height: 44px;\n    border-radius: 50%;\n    cursor: pointer;\n    display: flex; align-items: center; justify-content: center;\n    transition: background 0.15s;\n    z-index: 10;\n  }\n  #lbPrev { left: 16px; }\n  #lbNext { right: 16px; }\n  #lbPrev:hover, #lbNext:hover { background: rgba(201,168,108,0.35); }\n\n  #lbImg {\n    max-width: min(90vw, 900px);\n    max-height: 78vh;\n    object-fit: contain;\n    box-shadow: 0 0 80px rgba(0,0,0,0.8);\n    filter: sepia(10%) contrast(1.04);\n    border: 6px solid var(--paper);\n  }\n\n  #lbMeta {\n    margin-top: 16px;\n    text-align: center;\n    max-width: 600px;\n    padding: 0 20px;\n  }\n  #lbPeople {\n    font-family: 'Playfair Display', serif;\n    font-size: 1.05rem;\n    color: var(--paper);\n    margin-bottom: 4px;\n  }\n  #lbDate {\n    font-size: 0.82rem;\n    color: var(--sepia);\n    font-style: italic;\n    margin-bottom: 5px;\n  }\n  #lbCaption {\n    font-size: 0.85rem;\n    color: var(--ink-light);\n    font-style: italic;\n    line-height: 1.5;\n  }\n  #lbCounter {\n    font-size: 0.72rem;\n    color: var(--ink-light);\n    margin-top: 8px;\n    letter-spacing: 0.05em;\n  }\n\n  /* \u2500\u2500 Footer \u2500\u2500 */\n  footer {\n    background: var(--ink);\n    border-top: 1px solid rgba(201,168,108,0.15);\n    text-align: center;\n    padding: 20px;\n    font-size: 0.75rem;\n    color: var(--ink-light);\n    font-style: italic;\n  }\n\n  /* \u2500\u2500 Scrollbar \u2500\u2500 */\n  ::-webkit-scrollbar { width: 6px; }\n  ::-webkit-scrollbar-track { background: var(--ink); }\n  ::-webkit-scrollbar-thumb { background: var(--sepia-dark); border-radius: 3px; }\n\n  .mode-toggle {\n    display: flex;\n    border: 1px solid rgba(201,168,108,0.5);\n    border-radius: 20px;\n    overflow: hidden;\n  }\n  .mode-btn {\n    font-family: 'Lora', serif;\n    font-size: 0.8rem;\n    padding: 5px 14px;\n    border: none;\n    background: transparent;\n    color: var(--sepia);\n    cursor: pointer;\n    transition: all 0.15s;\n    font-weight: 500;\n  }\n  .mode-btn.active {\n    background: var(--sepia);\n    color: #fff;\n  }\n  .mode-btn:hover:not(.active) {\n    background: rgba(201,168,108,0.15);\n  }\n  .video-play-overlay {\n    position: absolute;\n    top: 50%;\n    left: 50%;\n    transform: translate(-50%, -60%);\n    width: 40px;\n    height: 40px;\n    background: rgba(28,21,16,0.65);\n    border-radius: 50%;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    color: var(--paper);\n    font-size: 1rem;\n    pointer-events: none;\n    border: 2px solid rgba(255,255,255,0.3);\n  }\n  .card:hover .video-play-overlay {\n    background: rgba(201,168,108,0.8);\n  }\n  .card-img-wrap { position: relative; }\n  #lbVid {\n    max-width: min(90vw, 900px);\n    max-height: 78vh;\n    box-shadow: 0 0 80px rgba(0,0,0,0.8);\n    border: 6px solid var(--paper);\n  }\n\n  @media (max-width: 600px) {\n    #hero { padding: 36px 20px 24px; }\n    #controls { padding: 12px 16px; }\n    #grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }\n    #lbPrev { left: 6px; } #lbNext { right: 6px; }\n  }\n</style>\n</head>\n<body>\n\n<div id=\"hero\">\n  <div class=\"hero-ornament\">\u2726 &nbsp; A Family Archive &nbsp; \u2726</div>\n  <h1 id=\"heroTitle\">Family <em>Photographs</em></h1>\n  <div class=\"hero-rule\"></div>\n  <p class=\"hero-sub\" id=\"heroSub\"></p>\n</div>\n\n<div id=\"controls\">\n  <div class=\"mode-toggle\" id=\"modeToggle\">\n    <button class=\"mode-btn active\" data-mode=\"photo\">Photos</button>\n    <button class=\"mode-btn\" data-mode=\"video\">Videos</button>\n  </div>\n  <div class=\"filter-wrap\" id=\"filterWrap\">\n    <select id=\"personSelect\"><option value=\"\" disabled selected>Filter by person\u2026</option></select>\n  </div>\n  <input id=\"searchBox\" type=\"text\" placeholder=\"Search\u2026\" />\n  <span class=\"photo-count\" id=\"photoCount\"></span>\n</div>\n\n<div id=\"main\">\n  <div id=\"grid\">\n    <div id=\"empty\">No photos match this filter.</div>\n  </div>\n</div>\n\n<footer>These photographs were lovingly preserved for our family.</footer>\n\n<!-- Lightbox -->\n<div id=\"lb\">\n  <button id=\"lbClose\">\u2715</button>\n  <button id=\"lbPrev\">&#8249;</button>\n  <button id=\"lbNext\">&#8250;</button>\n  <img id=\"lbImg\" src=\"\" alt=\"\" />\n  <video id=\"lbVid\" controls style=\"display:none;\"></video>\n  <div id=\"lbMeta\">\n    <div id=\"lbPeople\"></div>\n    <div id=\"lbDate\"></div>\n    <div id=\"lbCaption\"></div>\n    <div id=\"lbCounter\"></div>\n  </div>\n</div>\n\n<script>\n// \u2500\u2500 METADATA (injected by tagger) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nconst METADATA = __METADATA_JSON__;\nconst TITLE    = \"__TITLE__\";\nconst PHOTO_DIR = '__PHOTO_DIR__';\n// \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\ndocument.getElementById('heroTitle').innerHTML = TITLE\n  ? TITLE.replace(/(.+)/, (_, t) => {\n      const words = t.split(' ');\n      const last = words.pop();\n      return (words.length ? words.join(' ') + ' ' : '') + '<em>' + last + '</em>';\n    })\n  : 'Family <em>Photographs</em>';\n\n// Build photo list from metadata\nlet photos = Object.entries(METADATA).map(([filename, meta]) => ({\n  filename,\n  thumb: PHOTO_DIR + 'thumbs/' + (meta.type === 'video' ? 'v_' : '') + filename.replace(/\\.[^.]+$/, '.jpg'),\n  full: PHOTO_DIR + filename,\n  people: meta.people || [],\n  date: meta.date || '',\n  caption: meta.caption || '',\n  type: meta.type || 'photo'\n}));\n\n// Sort by date, undated last\nphotos.sort((a, b) => {\n  if (a.date && b.date) return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;\n  if (a.date) return -1;\n  if (b.date) return 1;\n  return a.filename.localeCompare(b.filename);\n});\n\n// Build people list\nconst allPeople = [...new Set(photos.flatMap(p => p.people))].sort();\nconst personSelect = document.getElementById('personSelect');\nallPeople.forEach(name => {\n  const opt = document.createElement('option');\n  opt.value = name; opt.textContent = name;\n  personSelect.appendChild(opt);\n});\n\nconst nPhotos = photos.filter(p => p.type === 'photo').length;\nconst nVideos = photos.filter(p => p.type === 'video').length;\nlet heroText = nPhotos + ' photograph' + (nPhotos !== 1 ? 's' : '');\nif (nVideos > 0) heroText += ' \\u00b7 ' + nVideos + ' video' + (nVideos !== 1 ? 's' : '');\nif (allPeople.length) heroText += ' \\u00b7 ' + allPeople.length + ' people';\ndocument.getElementById('heroSub').textContent = heroText;\n\n// \u2500\u2500 Filtering \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nlet selectedPeople = new Set();\nlet searchTerm = '';\nlet viewerMode = 'photo';\nlet filtered = [...photos];\nlet lbIndex = 0;\n\ndocument.querySelectorAll('.mode-btn').forEach(btn => {\n  btn.addEventListener('click', () => {\n    if (btn.dataset.mode === viewerMode) return;\n    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));\n    btn.classList.add('active');\n    viewerMode = btn.dataset.mode;\n    applyFilter();\n  });\n});\n\nfunction addPersonFilter(name) {\n  if (!name || selectedPeople.has(name)) return;\n  selectedPeople.add(name);\n  renderFilterPills();\n  applyFilter();\n}\n\nfunction removePersonFilter(name) {\n  selectedPeople.delete(name);\n  renderFilterPills();\n  applyFilter();\n}\n\nfunction renderFilterPills() {\n  const wrap = document.getElementById('filterWrap');\n  wrap.querySelectorAll('.filter-pill').forEach(p => p.remove());\n  selectedPeople.forEach(name => {\n    const pill = document.createElement('div');\n    pill.className = 'filter-pill';\n    pill.innerHTML = name + '<button title=\"Remove\">\u2715</button>';\n    pill.querySelector('button').addEventListener('click', () => removePersonFilter(name));\n    wrap.insertBefore(pill, personSelect);\n  });\n  const sel = document.getElementById('personSelect');\n  while (sel.options.length > 1) sel.remove(1);\n  allPeople.filter(n => !selectedPeople.has(n)).forEach(name => {\n    const opt = document.createElement('option');\n    opt.value = name; opt.textContent = name;\n    sel.appendChild(opt);\n  });\n  sel.value = '';\n}\n\nfunction applyFilter() {\n  const lower = searchTerm.toLowerCase();\n  filtered = photos.filter(p => {\n    if (p.type !== viewerMode) return false;\n    const matchPerson = selectedPeople.size === 0 || [...selectedPeople].every(n => p.people.includes(n));\n    const matchSearch = !lower ||\n      p.caption.toLowerCase().includes(lower) ||\n      p.people.some(n => n.toLowerCase().includes(lower)) ||\n      p.filename.toLowerCase().includes(lower) ||\n      p.date.toLowerCase().includes(lower);\n    return matchPerson && matchSearch;\n  });\n  renderGrid();\n}\n\npersonSelect.addEventListener('change', e => {\n  addPersonFilter(e.target.value);\n});\n\ndocument.getElementById('searchBox').addEventListener('input', e => {\n  searchTerm = e.target.value.trim();\n  applyFilter();\n});\n\n// \u2500\u2500 Grid render \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction renderGrid() {\n  const grid = document.getElementById('grid');\n  const empty = document.getElementById('empty');\n  const noun = viewerMode === 'video' ? 'videos' : 'photos';\n  const totalForMode = photos.filter(p => p.type === viewerMode).length;\n  document.getElementById('photoCount').textContent =\n    filtered.length === totalForMode\n      ? totalForMode + ' ' + noun\n      : filtered.length + ' of ' + totalForMode + ' ' + noun;\n\n  // Remove old cards\n  grid.querySelectorAll('.card').forEach(c => c.remove());\n\n  if (!filtered.length) { empty.textContent = 'No ' + noun + ' match this filter.'; empty.style.display = 'block'; return; }\n  empty.style.display = 'none';\n\n  filtered.forEach((photo, idx) => {\n    const card = document.createElement('div');\n    card.className = 'card';\n    const playOverlay = photo.type === 'video' ? '<div class=\"video-play-overlay\">\\u25B6</div>' : '';\n    card.innerHTML = \\`\n      <div class=\"card-img-wrap\">\n        <img src=\"\\${photo.thumb}\" alt=\"\\${photo.filename}\" loading=\"lazy\"\n             onerror=\"this.src='\\${photo.full}'\" />\n        \\${playOverlay}\n      </div>\n      <div class=\"card-body\">\n        <div class=\"card-caption\">\\${photo.caption || '&nbsp;'}</div>\n        \\${photo.date ? \\`<div class=\"card-date\">\\${fmtDate(photo.date)}</div>\\` : ''}\n        <div class=\"card-tags\">\\${photo.people.map(p => \\`<span class=\"card-tag\">\\${p}</span>\\`).join('')}</div>\n      </div>\\`;\n    card.addEventListener('click', () => openLb(idx));\n    grid.appendChild(card);\n  });\n}\n\n// \u2500\u2500 Lightbox \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction openLb(idx) {\n  lbIndex = idx;\n  showLb();\n  document.getElementById('lb').classList.add('open');\n}\n\nfunction showLb() {\n  const p = filtered[lbIndex];\n  const lbImg = document.getElementById('lbImg');\n  const lbVid = document.getElementById('lbVid');\n  if (p.type === 'video') {\n    lbImg.style.display = 'none';\n    lbVid.style.display = 'block';\n    lbVid.src = p.full;\n  } else {\n    lbVid.pause(); lbVid.src = ''; lbVid.style.display = 'none';\n    lbImg.style.display = ''; lbImg.src = p.full;\n  }\n  document.getElementById('lbPeople').textContent = p.people.join(' \\u00b7 ') || '';\n  document.getElementById('lbDate').textContent = p.date ? fmtDate(p.date) : '';\n  document.getElementById('lbCaption').textContent = p.caption || '';\n  document.getElementById('lbCounter').textContent = (lbIndex + 1) + ' of ' + filtered.length;\n}\n\nfunction closeLb() { document.getElementById('lbVid').pause(); document.getElementById('lbVid').src = ''; document.getElementById('lb').classList.remove('open'); }\ndocument.getElementById('lbClose').addEventListener('click', closeLb);\ndocument.getElementById('lb').addEventListener('click', e => { if (e.target === e.currentTarget) closeLb(); });\ndocument.getElementById('lbPrev').addEventListener('click', () => { lbIndex = (lbIndex - 1 + filtered.length) % filtered.length; showLb(); });\ndocument.getElementById('lbNext').addEventListener('click', () => { lbIndex = (lbIndex + 1) % filtered.length; showLb(); });\n\ndocument.addEventListener('keydown', e => {\n  const lb = document.getElementById('lb');\n  if (!lb.classList.contains('open')) return;\n  if (e.key === 'ArrowRight') { lbIndex = (lbIndex + 1) % filtered.length; showLb(); }\n  if (e.key === 'ArrowLeft')  { lbIndex = (lbIndex - 1 + filtered.length) % filtered.length; showLb(); }\n  if (e.key === 'Escape') closeLb();\n});\n\n// \u2500\u2500 Helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\nfunction fmtDate(d) {\n  if (!d) return '';\n  const parts = d.split('-');\n  const year = parts[0], month = parts[1], day = parts[2];\n  if (!month) return year;\n  const names = ['January','February','March','April','May','June','July','August','September','October','November','December'];\n  const mn = names[parseInt(month,10)-1] || month;\n  if (!day) return mn + ' ' + year;\n  try { return new Date(d + 'T12:00:00').toLocaleDateString('en-US', {year:'numeric',month:'short',day:'numeric'}); }\n  catch { return d; }\n}\n\n// \u2500\u2500 Init \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\napplyFilter();\n<\/script>\n</body>\n</html>";
 
-function openExportModal() {
+async function openExportModal() {
   if (!dirHandle) return;
-  document.getElementById('exportFolderName').textContent = dirHandle.name;
-  document.getElementById('exportTitle').value = dirHandle.name;
+  document.getElementById('exportFolderName').textContent = currentCollection?.name || dirHandle.name;
+  document.getElementById('exportTitle').value = currentCollection?.name || dirHandle.name;
   document.querySelector('input[name="exportDest"][value="current"]').checked = true;
   document.getElementById('exportPhotosRow').style.display = 'none';
   document.getElementById('exportPhotosCheck').checked = true;
+
+  // Populate collection picker
+  const list = document.getElementById('exportCollectionList');
+  let allCols;
+  try { allCols = await dbGetAll(); } catch { allCols = []; }
+
+  if (allCols.length <= 1) {
+    // Only one or zero collections — hide picker, just export current
+    document.getElementById('exportCollectionPicker').style.display = 'none';
+  } else {
+    document.getElementById('exportCollectionPicker').style.display = '';
+    list.innerHTML = '';
+    for (const col of allCols) {
+      const item = document.createElement('label');
+      item.className = 'export-col-item';
+      const checked = currentCollection && col.id === currentCollection.id ? 'checked' : '';
+      item.innerHTML = `<input type="checkbox" value="${col.id}" ${checked} /><span class="col-name">${escapeHtml(col.name)}</span><span class="col-folder">(${escapeHtml(col.directoryHandle?.name || '')})</span>`;
+      list.appendChild(item);
+    }
+  }
+
   document.getElementById('exportModal').classList.add('open');
 }
 
-function buildViewerHtml(title, photoDir) {
-  const fullMeta = {};
-  for (const photo of photos) {
-    fullMeta[photo.name] = {
-      ...(metadata[photo.name] || { people: [], date: '', caption: '' }),
-      type: photo.type || 'photo'
-    };
+// Load metadata + photo list from a directory handle (without switching the active collection)
+async function _loadCollectionData(handle) {
+  let meta = {};
+  let kinloreDir = null;
+  try { kinloreDir = await handle.getDirectoryHandle('_kinlore'); } catch {}
+  if (kinloreDir) {
+    try {
+      const mf = await kinloreDir.getFileHandle('metadata.json');
+      meta = JSON.parse(await (await mf.getFile()).text());
+    } catch {}
   }
-  const metaJson = JSON.stringify(fullMeta, null, 2);
-  const html = VIEWER_TEMPLATE
+  if (Object.keys(meta).length === 0) {
+    try {
+      const mf = await handle.getFileHandle('metadata.json');
+      meta = JSON.parse(await (await mf.getFile()).text());
+    } catch {}
+  }
+
+  const ALL_EXTS = new Set([...IMAGE_EXTS, ...VIDEO_EXTS]);
+  const photoList = [];
+  for await (const entry of handle.values()) {
+    if (entry.kind !== 'file') continue;
+    const ext = entry.name.substring(entry.name.lastIndexOf('.')).toLowerCase();
+    if (!ALL_EXTS.has(ext)) continue;
+    const type = VIDEO_EXTS.has(ext) ? 'video' : 'photo';
+    photoList.push({ name: entry.name, fileHandle: entry, type });
+  }
+
+  // Find thumbs handle
+  let thumbsHandle = null;
+  if (kinloreDir) { try { thumbsHandle = await kinloreDir.getDirectoryHandle('thumbs'); } catch {} }
+  if (!thumbsHandle) { try { thumbsHandle = await handle.getDirectoryHandle('thumbs'); } catch {} }
+
+  return { photos: photoList, metadata: meta, thumbsHandle };
+}
+
+function buildViewerHtml(title, photoDir, collections) {
+  let metaObj;
+  const isMulti = collections.length > 1;
+  if (!isMulti) {
+    // Single collection — flat metadata (backward compatible)
+    const col = collections[0];
+    metaObj = {};
+    for (const p of col.photos) {
+      metaObj[p.name] = {
+        ...(col.metadata[p.name] || { people: [], date: '', caption: '' }),
+        type: p.type || 'photo'
+      };
+    }
+  } else {
+    // Multiple collections — nested under _collections
+    metaObj = { _collections: {} };
+    for (const col of collections) {
+      const colMeta = {};
+      for (const p of col.photos) {
+        colMeta[p.name] = {
+          ...(col.metadata[p.name] || { people: [], date: '', caption: '' }),
+          type: p.type || 'photo'
+        };
+      }
+      metaObj._collections[col.name] = colMeta;
+    }
+  }
+  const metaJson = JSON.stringify(metaObj, null, 2);
+  let html = VIEWER_TEMPLATE
     .replace('__METADATA_JSON__', metaJson)
     .replace('__TITLE__', title.replace(/'/g, "\\'"))
     .replace('__PHOTO_DIR__', photoDir);
+
+  if (isMulti) {
+    // Inject collection picker CSS before </style>
+    const pickerCSS = `
+  #collectionPicker {
+    padding: 60px 24px;
+    text-align: center;
+    min-height: 60vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+  }
+  #collectionPicker h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.8rem;
+    color: var(--paper);
+    font-weight: 700;
+  }
+  .cp-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 18px;
+    max-width: 800px;
+    width: 100%;
+  }
+  .cp-card {
+    background: var(--paper-dark);
+    border-radius: 6px;
+    padding: 24px 20px;
+    cursor: pointer;
+    box-shadow: 3px 3px 14px var(--shadow);
+    transition: transform 0.18s, box-shadow 0.18s;
+    text-align: left;
+  }
+  .cp-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 6px 10px 28px var(--shadow);
+  }
+  .cp-card .cp-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 8px;
+  }
+  .cp-card .cp-stat {
+    font-size: 0.78rem;
+    color: var(--ink-light);
+    font-style: italic;
+  }
+  .cp-all {
+    background: transparent;
+    border: 2px solid var(--sepia);
+    color: var(--paper);
+  }
+  .cp-all .cp-name { color: var(--sepia); }
+  .cp-all .cp-stat { color: var(--paper-mid); }
+  #cpBackBtn {
+    display: none;
+    background: none;
+    border: 1px solid rgba(201,168,108,0.5);
+    color: var(--sepia);
+    font-family: 'Lora', serif;
+    font-size: 0.82rem;
+    padding: 5px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    margin-right: 10px;
+    transition: all 0.15s;
+  }
+  #cpBackBtn:hover { background: rgba(201,168,108,0.15); }`;
+    html = html.replace('</style>', pickerCSS + '\n</style>');
+
+    // Inject collection picker HTML before <div id="main">
+    const pickerHTML = `<div id="collectionPicker"></div>`;
+    html = html.replace('<div id="main">', pickerHTML + '\n<div id="main">');
+
+    // Inject back button in controls before search box
+    html = html.replace(
+      '<input id="searchBox"',
+      '<button id="cpBackBtn">All Collections</button><input id="searchBox"'
+    );
+
+    // Skip _collections key in initial flat photo building
+    html = html.replace(
+      'Object.entries(METADATA)',
+      'Object.entries(METADATA).filter(([k]) => !k.startsWith("_"))'
+    );
+
+    // Inject collection picker JS before the "// ── Init" line
+    const pickerJS = `
+// ── Collection Picker ───────────────────────────────────────────
+const isMultiCollection = !!METADATA._collections;
+const collectionNames = isMultiCollection ? Object.keys(METADATA._collections) : [];
+let activeCollection = null;
+
+function buildPhotosFromMeta(meta, dirPrefix) {
+  return Object.entries(meta).map(([filename, m]) => ({
+    filename,
+    thumb: dirPrefix + 'thumbs/' + (m.type === 'video' ? 'v_' : '') + filename.replace(/\\.[^.]+$/, '.jpg'),
+    full: dirPrefix + filename,
+    people: m.people || [],
+    date: m.date || '',
+    caption: m.caption || '',
+    type: m.type || 'photo'
+  }));
+}
+
+function showCollectionPicker() {
+  const picker = document.getElementById('collectionPicker');
+  document.getElementById('main').style.display = 'none';
+  document.getElementById('controls').style.display = 'none';
+  document.getElementById('cpBackBtn').style.display = 'none';
+  picker.style.display = '';
+  picker.innerHTML = '';
+
+  const h2 = document.createElement('h2');
+  h2.textContent = 'Choose a Collection';
+  picker.appendChild(h2);
+
+  const grid = document.createElement('div');
+  grid.className = 'cp-grid';
+
+  // "All" card
+  const allCard = document.createElement('div');
+  allCard.className = 'cp-card cp-all';
+  const totalPhotos = collectionNames.reduce((sum, n) => sum + Object.keys(METADATA._collections[n]).length, 0);
+  allCard.innerHTML = '<div class="cp-name">All Collections</div><div class="cp-stat">' + totalPhotos + ' items total</div>';
+  allCard.addEventListener('click', () => selectCollection(null));
+  grid.appendChild(allCard);
+
+  collectionNames.forEach(name => {
+    const meta = METADATA._collections[name];
+    const count = Object.keys(meta).length;
+    const card = document.createElement('div');
+    card.className = 'cp-card';
+    card.innerHTML = '<div class="cp-name">' + name + '</div><div class="cp-stat">' + count + ' items</div>';
+    card.addEventListener('click', () => selectCollection(name));
+    grid.appendChild(card);
+  });
+
+  picker.appendChild(grid);
+}
+
+function selectCollection(name) {
+  activeCollection = name;
+  document.getElementById('collectionPicker').style.display = 'none';
+  document.getElementById('main').style.display = '';
+  document.getElementById('controls').style.display = '';
+  document.getElementById('cpBackBtn').style.display = '';
+
+  if (name === null) {
+    // All collections merged
+    photos = [];
+    collectionNames.forEach(cn => {
+      const dirPrefix = PHOTO_DIR + cn + '/';
+      photos.push(...buildPhotosFromMeta(METADATA._collections[cn], dirPrefix));
+    });
+  } else {
+    const dirPrefix = PHOTO_DIR + name + '/';
+    photos = buildPhotosFromMeta(METADATA._collections[name], dirPrefix);
+  }
+
+  photos.sort((a, b) => {
+    if (a.date && b.date) return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
+    if (a.date) return -1;
+    if (b.date) return 1;
+    return a.filename.localeCompare(b.filename);
+  });
+
+  // Rebuild people list
+  allPeople.length = 0;
+  allPeople.push(...[...new Set(photos.flatMap(p => p.people))].sort());
+  selectedPeople.clear();
+  searchTerm = '';
+  document.getElementById('searchBox').value = '';
+  renderFilterPills();
+
+  // Update hero subtitle
+  const nP = photos.filter(p => p.type === 'photo').length;
+  const nV = photos.filter(p => p.type === 'video').length;
+  let ht = nP + ' photograph' + (nP !== 1 ? 's' : '');
+  if (nV > 0) ht += ' \\u00b7 ' + nV + ' video' + (nV !== 1 ? 's' : '');
+  if (allPeople.length) ht += ' \\u00b7 ' + allPeople.length + ' people';
+  document.getElementById('heroSub').textContent = ht;
+
+  applyFilter();
+}
+
+if (isMultiCollection) {
+  document.getElementById('cpBackBtn').addEventListener('click', showCollectionPicker);
+  showCollectionPicker();
+}
+`;
+    html = html.replace('// \u2500\u2500 Init \u2500\u2500', pickerJS + '\n// \u2500\u2500 Init \u2500\u2500');
+  }
+
   return html.replace(/\\`/g, '`').replace(/\\\${/g, '${');
 }
 
 async function runExport() {
-  const title = document.getElementById('exportTitle').value.trim() || dirHandle.name;
+  const title = document.getElementById('exportTitle').value.trim() || dirHandle?.name || 'Photos';
   const dest = document.querySelector('input[name="exportDest"]:checked').value;
   document.getElementById('exportModal').classList.remove('open');
 
+  // Determine which collections to export
+  const checkedBoxes = document.querySelectorAll('#exportCollectionList input[type=checkbox]:checked');
+  let selectedColIds = [...checkedBoxes].map(cb => Number(cb.value));
+
+  // If picker was hidden (single collection), use current
+  if (document.getElementById('exportCollectionPicker').style.display === 'none') {
+    selectedColIds = currentCollection ? [currentCollection.id] : [];
+  }
+
+  // Build collection data array
+  const exportCollections = [];
+  if (selectedColIds.length === 0) {
+    // No saved collections — use current in-memory state (backward compat for unsaved folders)
+    exportCollections.push({ name: dirHandle?.name || 'Photos', photos, metadata, thumbsHandle: thumbsDirHandle, handle: dirHandle });
+  } else {
+    for (const colId of selectedColIds) {
+      const col = await dbGet(colId);
+      if (!col) continue;
+
+      if (currentCollection && col.id === currentCollection.id) {
+        // Use live in-memory data for the active collection
+        exportCollections.push({ name: col.name, photos, metadata, thumbsHandle: thumbsDirHandle, handle: dirHandle });
+      } else {
+        // Need to load from disk — request permission
+        try {
+          const perm = await col.directoryHandle.requestPermission({ mode: 'readwrite' });
+          if (perm !== 'granted') {
+            showToast(`Permission denied for "${col.name}" — skipping.`, 'error', 5000);
+            continue;
+          }
+          showToast(`Loading "${col.name}"…`, 'working', 0);
+          const data = await _loadCollectionData(col.directoryHandle);
+          exportCollections.push({ name: col.name, photos: data.photos, metadata: data.metadata, thumbsHandle: data.thumbsHandle, handle: col.directoryHandle });
+        } catch (e) {
+          showToast(`Could not access "${col.name}": ${e.message}`, 'error', 5000);
+        }
+      }
+    }
+  }
+
+  if (exportCollections.length === 0) {
+    showToast('No collections to export.', 'error', 5000);
+    return;
+  }
+
+  const isMulti = exportCollections.length > 1;
+
   if (dest === 'current') {
-    // Save viewer in current folder
+    // Single-collection only for "current folder" dest
+    const col = exportCollections[0];
     try {
-      await dirHandle.getFileHandle('index.html');
-      const ok = confirm(`A viewer (index.html) already exists in "${dirHandle.name}".\n\nOverwrite it with a new one?`);
+      await col.handle.getFileHandle('index.html');
+      const ok = confirm(`A viewer (index.html) already exists in "${col.handle.name}".\n\nOverwrite it with a new one?`);
       if (!ok) return;
     } catch { /* doesn't exist yet */ }
 
     showToast('Generating viewer…', 'working', 0);
-    const safeHtml = buildViewerHtml(title, '');
+    const safeHtml = buildViewerHtml(title, '', [col]);
     const blob = new Blob([safeHtml], { type: 'text/html' });
 
     try {
-      const viewerHandle = await dirHandle.getFileHandle('index.html', { create: true });
+      const viewerHandle = await col.handle.getFileHandle('index.html', { create: true });
       const writable = await viewerHandle.createWritable();
       await writable.write(blob);
       await writable.close();
-      showToast(`Viewer saved to ${dirHandle.name}`, 'success', 6000);
-      setStatus(`Viewer saved to ${dirHandle.name}`);
+      showToast(`Viewer saved to ${col.handle.name}`, 'success', 6000);
+      setStatus(`Viewer saved to ${col.handle.name}`);
       appendLog('INFO', 'Viewer (index.html) written to folder');
     } catch (e) {
       hideToast();
@@ -3925,7 +4658,7 @@ async function runExport() {
 
     try {
       showToast('Preparing viewer…', 'working', 0);
-      const safeHtml = buildViewerHtml(title, 'photos/');
+      const safeHtml = buildViewerHtml(title, 'photos/', exportCollections);
 
       const viewerHandle = await destHandle.getFileHandle('index.html', { create: true });
       const vw = await viewerHandle.createWritable();
@@ -3934,37 +4667,44 @@ async function runExport() {
 
       if (includePhotos) {
         const photosDir = await destHandle.getDirectoryHandle('photos', { create: true });
-        const total = photos.length;
-        for (let i = 0; i < total; i++) {
-          showToast(`Copying file ${i + 1} of ${total}…`, 'working', 0);
-          const srcFile = await photos[i].fileHandle.getFile();
-          const destFile = await photosDir.getFileHandle(photos[i].name, { create: true });
-          const w = await destFile.createWritable();
-          await w.write(await srcFile.arrayBuffer());
-          await w.close();
-        }
 
-        if (thumbsDirHandle) {
-          const destThumbsDir = await photosDir.getDirectoryHandle('thumbs', { create: true });
-          const thumbEntries = [];
-          for await (const entry of thumbsDirHandle.values()) {
-            if (entry.kind === 'file') thumbEntries.push(entry);
-          }
-          const thumbTotal = thumbEntries.length;
-          for (let i = 0; i < thumbTotal; i++) {
-            showToast(`Copying thumbnail ${i + 1} of ${thumbTotal}…`, 'working', 0);
-            const srcFile = await thumbEntries[i].getFile();
-            const destFile = await destThumbsDir.getFileHandle(thumbEntries[i].name, { create: true });
+        for (const col of exportCollections) {
+          // For multi-collection, namespace photos under collection name
+          const colDir = isMulti
+            ? await photosDir.getDirectoryHandle(col.name, { create: true })
+            : photosDir;
+
+          const total = col.photos.length;
+          for (let i = 0; i < total; i++) {
+            showToast(`Copying ${isMulti ? col.name + ': ' : ''}file ${i + 1} of ${total}…`, 'working', 0);
+            const srcFile = await col.photos[i].fileHandle.getFile();
+            const destFile = await colDir.getFileHandle(col.photos[i].name, { create: true });
             const w = await destFile.createWritable();
             await w.write(await srcFile.arrayBuffer());
             await w.close();
           }
+
+          if (col.thumbsHandle) {
+            const destThumbsDir = await colDir.getDirectoryHandle('thumbs', { create: true });
+            const thumbEntries = [];
+            for await (const entry of col.thumbsHandle.values()) {
+              if (entry.kind === 'file') thumbEntries.push(entry);
+            }
+            for (let i = 0; i < thumbEntries.length; i++) {
+              const srcFile = await thumbEntries[i].getFile();
+              const destFile = await destThumbsDir.getFileHandle(thumbEntries[i].name, { create: true });
+              const w = await destFile.createWritable();
+              await w.write(await srcFile.arrayBuffer());
+              await w.close();
+            }
+          }
         }
       }
 
+      const colNames = exportCollections.map(c => c.name).join(', ');
       showToast(`Exported to "${destHandle.name}"`, 'success', 8000);
       setStatus(`Exported to "${destHandle.name}"`);
-      appendLog('INFO', `Exported to: ${destHandle.name}` + (includePhotos ? ' (with photos)' : ' (viewer only)'));
+      appendLog('INFO', `Exported to: ${destHandle.name} (${colNames})` + (includePhotos ? ' with photos' : ' viewer only'));
     } catch (e) {
       hideToast();
       setStatus(`Export failed: ${e.message}`);
