@@ -166,14 +166,17 @@
     justify-content: center;
   }
   .collection-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: 16px;
     width: 100%;
-    max-width: 860px;
+    max-width: 900px;
     margin-top: 8px;
   }
   .collection-card {
+    width: 260px;
+    flex-shrink: 0;
     background: var(--paper);
     border: 1px solid rgba(200,146,78,0.35);
     border-radius: var(--radius);
@@ -226,6 +229,22 @@
   }
   .collection-card:hover .cc-delete { opacity: 1; }
   .collection-card .cc-delete:hover { color: var(--accent); background: rgba(139,58,30,0.1); }
+  .collection-card .cc-rename {
+    position: absolute;
+    top: 8px;
+    right: 36px;
+    background: none;
+    border: none;
+    color: var(--faded);
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .collection-card:hover .cc-rename { opacity: 1; }
+  .collection-card .cc-rename:hover { color: var(--sepia); background: rgba(200,146,78,0.1); }
   .collection-card.cc-error {
     border-color: var(--accent);
     opacity: 0.75;
@@ -235,10 +254,12 @@
     color: var(--accent);
   }
   #emptyCollections {
+    width: 100%;
+    text-align: center;
     color: var(--faded);
     font-style: italic;
     font-size: 0.9rem;
-    padding: 20px;
+    padding: 40px 20px;
   }
   .export-col-item {
     display: flex;
@@ -1370,6 +1391,19 @@
   </div>
 </div>
 
+<!-- Rename Collection Modal -->
+<div id="renameCollectionModal" class="modal-overlay" style="display:none;">
+  <div class="modal-box" style="max-width:400px;">
+    <h3>Rename Collection</h3>
+    <label class="modal-label" style="margin-top:12px;">New Name</label>
+    <input type="text" class="modal-input" id="renameCollectionInput" placeholder="Collection name" autocomplete="off" />
+    <div class="modal-actions" style="margin-top:18px;">
+      <button class="btn btn-secondary" id="renameCancelBtn">Cancel</button>
+      <button class="btn btn-accent" id="renameSaveBtn">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Relocate Collection Modal -->
 <div id="relocateModal" class="modal-overlay" style="display:none;">
   <div class="modal-box" style="max-width:420px;">
@@ -1867,10 +1901,11 @@ async function renderCollectionGrid() {
       <div class="cc-name">${escapeHtml(col.name)}</div>
       <div class="cc-folder">${escapeHtml(col.directoryHandle?.name || '(unknown)')}</div>
       <div class="cc-date">Created ${new Date(col.createdAt).toLocaleDateString()}</div>
+      <button class="cc-rename" title="Rename collection">✎</button>
       <button class="cc-delete" title="Delete collection">&times;</button>
     `;
     card.addEventListener('click', (e) => {
-      if (e.target.closest('.cc-delete')) return;
+      if (e.target.closest('.cc-delete') || e.target.closest('.cc-rename')) return;
       openCollection(col.id);
     });
     card.querySelector('.cc-delete').addEventListener('click', async (e) => {
@@ -1879,8 +1914,24 @@ async function renderCollectionGrid() {
       await dbDelete(col.id);
       renderCollectionGrid();
     });
+    card.querySelector('.cc-rename').addEventListener('click', (e) => {
+      e.stopPropagation();
+      showRenameModal(col.id, col.name);
+    });
     grid.appendChild(card);
   }
+}
+
+let _renameTargetId = null;
+function showRenameModal(id, currentName) {
+  _renameTargetId = id;
+  document.getElementById('renameCollectionInput').value = currentName;
+  document.getElementById('renameCollectionModal').style.display = '';
+  setTimeout(() => {
+    const input = document.getElementById('renameCollectionInput');
+    input.focus();
+    input.select();
+  }, 50);
 }
 
 async function openCollection(id) {
@@ -1923,6 +1974,29 @@ document.getElementById('relocateModal').addEventListener('click', e => {
 
 document.getElementById('newCollectionModal').addEventListener('click', e => {
   if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
+});
+
+document.getElementById('renameCollectionModal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) { e.currentTarget.style.display = 'none'; _renameTargetId = null; }
+});
+document.getElementById('renameCancelBtn').addEventListener('click', () => {
+  document.getElementById('renameCollectionModal').style.display = 'none';
+  _renameTargetId = null;
+});
+document.getElementById('renameSaveBtn').addEventListener('click', async () => {
+  const newName = document.getElementById('renameCollectionInput').value.trim();
+  if (!newName || !_renameTargetId) return;
+  await dbUpdate(_renameTargetId, { name: newName });
+  if (currentCollection && currentCollection.id === _renameTargetId) {
+    currentCollection = await dbGet(_renameTargetId);
+  }
+  document.getElementById('renameCollectionModal').style.display = 'none';
+  _renameTargetId = null;
+  renderCollectionGrid();
+});
+document.getElementById('renameCollectionInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('renameSaveBtn').click();
+  if (e.key === 'Escape') document.getElementById('renameCancelBtn').click();
 });
 
 document.getElementById('relocatePickBtn').addEventListener('click', async () => {
@@ -4230,6 +4304,10 @@ function buildPartialDate() {
   return y + '-' + m + '-' + d;
 }
 
+function sanitizeForFilesystem(name) {
+  return name.replace(/[/\\:*?"<>|]/g, '-').replace(/\.{2,}/g, '-').trim() || 'Collection';
+}
+
 function formatDate(d) {
   if (!d) return '';
   const parts = d.split('-');
@@ -4345,7 +4423,7 @@ function buildViewerHtml(title, photoDir, collections) {
           type: p.type || 'photo'
         };
       }
-      metaObj._collections[col.name] = colMeta;
+      metaObj._collections[sanitizeForFilesystem(col.name)] = colMeta;
     }
   }
   const metaJson = JSON.stringify(metaObj, null, 2);
@@ -4671,7 +4749,7 @@ async function runExport() {
         for (const col of exportCollections) {
           // For multi-collection, namespace photos under collection name
           const colDir = isMulti
-            ? await photosDir.getDirectoryHandle(col.name, { create: true })
+            ? await photosDir.getDirectoryHandle(sanitizeForFilesystem(col.name), { create: true })
             : photosDir;
 
           const total = col.photos.length;
