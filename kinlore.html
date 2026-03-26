@@ -2445,8 +2445,13 @@ function startScanMode() {
   scanKnownFiles = new Set(photos.map(p => p.name));
   scanQueue = [];
   appendLog('INFO', 'Scan mode started');
-  // If no photo is open, show the waiting overlay
-  if (!currentPhoto) showScanWaiting();
+  // Auto-save current photo and transition to waiting state
+  if (currentPhoto) {
+    saveCurrentPhoto();
+    const vid = document.getElementById('fullPreviewVideo');
+    vid.pause(); vid.src = '';
+  }
+  showScanWaiting();
   // Start polling
   scanPollTimer = setInterval(scanPoll, 1500);
 }
@@ -2517,8 +2522,14 @@ async function scanPoll() {
     appendLog('INFO', `Scan detected: ${entry.name}`);
   }
 
-  if (scanQueue.length > 0 && scanWaiting) {
-    presentNextScan();
+  if (scanQueue.length > 0) {
+    if (scanWaiting) {
+      presentNextScan();
+    } else if (currentPhoto && !isDirty) {
+      saveCurrentPhoto();
+      presentNextScan();
+      appendLog('INFO', 'Auto-advanced (no edits)');
+    }
   }
 }
 
