@@ -1456,7 +1456,7 @@
       <label class="modal-label">Destination</label>
       <label class="modal-radio-row">
         <input type="radio" name="exportDest" value="current" checked />
-        <span class="modal-radio-label">Save in current folder<small>Writes index.html alongside your photos</small></span>
+        <span class="modal-radio-label">Save in current folder<small>Writes a viewer file alongside your photos</small></span>
       </label>
       <label class="modal-radio-row">
         <input type="radio" name="exportDest" value="other" />
@@ -4414,8 +4414,9 @@ function buildViewerHtml(title, photoDir, collections) {
     }
   } else {
     // Multiple collections — nested under _collections
-    metaObj = { _collections: {} };
+    metaObj = { _collections: {}, _displayNames: {} };
     for (const col of collections) {
+      const safeName = sanitizeForFilesystem(col.name);
       const colMeta = {};
       for (const p of col.photos) {
         colMeta[p.name] = {
@@ -4423,7 +4424,8 @@ function buildViewerHtml(title, photoDir, collections) {
           type: p.type || 'photo'
         };
       }
-      metaObj._collections[sanitizeForFilesystem(col.name)] = colMeta;
+      metaObj._collections[safeName] = colMeta;
+      metaObj._displayNames[safeName] = col.name;
     }
   }
   const metaJson = JSON.stringify(metaObj, null, 2);
@@ -4491,7 +4493,7 @@ function buildViewerHtml(title, photoDir, collections) {
   .cp-all .cp-stat { color: var(--paper-mid); }
   #cpBackBtn {
     display: none;
-    background: none;
+    background: rgba(201,168,108,0.18);
     border: 1px solid rgba(201,168,108,0.5);
     color: var(--sepia);
     font-family: 'Lora', serif;
@@ -4502,7 +4504,7 @@ function buildViewerHtml(title, photoDir, collections) {
     margin-right: 10px;
     transition: all 0.15s;
   }
-  #cpBackBtn:hover { background: rgba(201,168,108,0.15); }`;
+  #cpBackBtn:hover { background: rgba(201,168,108,0.35); }`;
     html = html.replace('</style>', pickerCSS + '\n</style>');
 
     // Inject collection picker HTML before <div id="main">
@@ -4512,7 +4514,7 @@ function buildViewerHtml(title, photoDir, collections) {
     // Inject back button in controls before search box
     html = html.replace(
       '<input id="searchBox"',
-      '<button id="cpBackBtn">All Collections</button><input id="searchBox"'
+      '<button id="cpBackBtn">\u2190 Collections</button><input id="searchBox"'
     );
 
     // Skip _collections key in initial flat photo building
@@ -4566,9 +4568,10 @@ function showCollectionPicker() {
   collectionNames.forEach(name => {
     const meta = METADATA._collections[name];
     const count = Object.keys(meta).length;
+    const displayName = (METADATA._displayNames && METADATA._displayNames[name]) || name;
     const card = document.createElement('div');
     card.className = 'cp-card';
-    card.innerHTML = '<div class="cp-name">' + name + '</div><div class="cp-stat">' + count + ' items</div>';
+    card.innerHTML = '<div class="cp-name">' + displayName + '</div><div class="cp-stat">' + count + ' items</div>';
     card.addEventListener('click', () => selectCollection(name));
     grid.appendChild(card);
   });
@@ -4629,11 +4632,18 @@ if (isMultiCollection) {
     html = html.replace('// \u2500\u2500 Init \u2500\u2500', pickerJS + '\n// \u2500\u2500 Init \u2500\u2500');
   }
 
+  // Light body / footer overrides (dark hero + controls bar retained via explicit backgrounds)
+  const lightBodyCSS = `
+  body { background: var(--paper); color: var(--ink); }
+  footer { background: var(--paper-dark); color: var(--ink-light); border-top: 1px solid rgba(201,168,108,0.3); }`;
+  html = html.replace('</style>', lightBodyCSS + '\n</style>');
+
   return html.replace(/\\`/g, '`').replace(/\\\${/g, '${');
 }
 
 async function runExport() {
   const title = document.getElementById('exportTitle').value.trim() || dirHandle?.name || 'Photos';
+  const viewerFilename = sanitizeForFilesystem(title) + '.html';
   const dest = document.querySelector('input[name="exportDest"]:checked').value;
   document.getElementById('exportModal').classList.remove('open');
 
@@ -4688,8 +4698,8 @@ async function runExport() {
     // Single-collection only for "current folder" dest
     const col = exportCollections[0];
     try {
-      await col.handle.getFileHandle('index.html');
-      const ok = confirm(`A viewer (index.html) already exists in "${col.handle.name}".\n\nOverwrite it with a new one?`);
+      await col.handle.getFileHandle(viewerFilename);
+      const ok = confirm(`A viewer (${viewerFilename}) already exists in "${col.handle.name}".\n\nOverwrite it with a new one?`);
       if (!ok) return;
     } catch { /* doesn't exist yet */ }
 
@@ -4698,21 +4708,21 @@ async function runExport() {
     const blob = new Blob([safeHtml], { type: 'text/html' });
 
     try {
-      const viewerHandle = await col.handle.getFileHandle('index.html', { create: true });
+      const viewerHandle = await col.handle.getFileHandle(viewerFilename, { create: true });
       const writable = await viewerHandle.createWritable();
       await writable.write(blob);
       await writable.close();
       showToast(`Viewer saved to ${col.handle.name}`, 'success', 6000);
       setStatus(`Viewer saved to ${col.handle.name}`);
-      appendLog('INFO', 'Viewer (index.html) written to folder');
+      appendLog('INFO', `Viewer (${viewerFilename}) written to folder`);
     } catch (e) {
       hideToast();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = 'index.html'; a.click();
+      a.href = url; a.download = viewerFilename; a.click();
       URL.revokeObjectURL(url);
-      setStatus('index.html downloaded — move it into your photos folder.');
-      showToast('index.html downloaded — move it into your photos folder.', 'info', 6000);
+      setStatus(`${viewerFilename} downloaded — move it into your photos folder.`);
+      showToast(`${viewerFilename} downloaded — move it into your photos folder.`, 'info', 6000);
       appendLog('WARN', 'Viewer write failed — used browser download');
     }
   } else {
@@ -4723,12 +4733,12 @@ async function runExport() {
     } catch { return; } // user cancelled
 
     let hasExisting = false;
-    try { await destHandle.getFileHandle('index.html'); hasExisting = true; } catch {}
+    try { await destHandle.getFileHandle(viewerFilename); hasExisting = true; } catch {}
     if (!hasExisting) {
-      try { await destHandle.getDirectoryHandle('photos'); hasExisting = true; } catch {}
+      try { await destHandle.getDirectoryHandle('_media'); hasExisting = true; } catch {}
     }
     if (hasExisting) {
-      const ok = confirm(`"${destHandle.name}" already contains a viewer or photos folder.\n\nOverwrite everything?`);
+      const ok = confirm(`"${destHandle.name}" already contains a viewer or _media folder.\n\nOverwrite everything?`);
       if (!ok) return;
     }
 
@@ -4736,15 +4746,15 @@ async function runExport() {
 
     try {
       showToast('Preparing viewer…', 'working', 0);
-      const safeHtml = buildViewerHtml(title, 'photos/', exportCollections);
+      const safeHtml = buildViewerHtml(title, '_media/', exportCollections);
 
-      const viewerHandle = await destHandle.getFileHandle('index.html', { create: true });
+      const viewerHandle = await destHandle.getFileHandle(viewerFilename, { create: true });
       const vw = await viewerHandle.createWritable();
       await vw.write(new Blob([safeHtml], { type: 'text/html' }));
       await vw.close();
 
       if (includePhotos) {
-        const photosDir = await destHandle.getDirectoryHandle('photos', { create: true });
+        const photosDir = await destHandle.getDirectoryHandle('_media', { create: true });
 
         for (const col of exportCollections) {
           // For multi-collection, namespace photos under collection name
