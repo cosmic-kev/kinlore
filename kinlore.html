@@ -1446,30 +1446,30 @@
   <div class="modal-box">
     <h3>Export Viewer</h3>
     <div class="modal-folder-name" id="exportFolderName"></div>
-    <div id="exportCollectionPicker" style="margin-bottom:14px;">
-      <label class="modal-label">Include collections</label>
-      <div id="exportCollectionList"></div>
-    </div>
     <label class="modal-label">Viewer title</label>
     <input type="text" class="modal-input" id="exportTitle" placeholder="e.g. The Johnson Family" />
     <div class="modal-radio-group">
       <label class="modal-label">Destination</label>
       <label class="modal-radio-row">
-        <input type="radio" name="exportDest" value="current" checked />
-        <span class="modal-radio-label">Save in current folder<small>Writes a viewer file alongside your photos</small></span>
-      </label>
-      <label class="modal-radio-row">
         <input type="radio" name="exportDest" value="other" />
         <span class="modal-radio-label">Export to another location<small>Choose a flash drive or separate folder</small></span>
       </label>
+      <label class="modal-check-row" id="exportPhotosRow">
+        <input type="checkbox" id="exportPhotosCheck" checked />
+        <span class="modal-check-label">
+          Include photos
+          <small>Copies all photos and thumbnails to the destination</small>
+        </span>
+      </label>
+      <label class="modal-radio-row">
+        <input type="radio" name="exportDest" value="current" checked />
+        <span class="modal-radio-label">Save in current folder<small>Writes a viewer file alongside your photos</small></span>
+      </label>
     </div>
-    <label class="modal-check-row" id="exportPhotosRow" style="display:none;">
-      <input type="checkbox" id="exportPhotosCheck" checked />
-      <span class="modal-check-label">
-        Include photos
-        <small>Copies all photos and thumbnails to the destination</small>
-      </span>
-    </label>
+    <div id="exportCollectionPicker" style="margin-bottom:14px;">
+      <label class="modal-label">Include collections</label>
+      <div id="exportCollectionList"></div>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" style="color:var(--ink-light);border-color:var(--sepia);" id="exportCancelBtn">Cancel</button>
       <button class="btn btn-accent" id="exportRunBtn">Export</button>
@@ -2087,7 +2087,11 @@ document.getElementById('exportRunBtn').addEventListener('click', runExport);
 document.getElementById('scanModeBtn').addEventListener('click', toggleScanMode);
 document.getElementById('scanStopBtn').addEventListener('click', stopScanMode);
 document.querySelectorAll('input[name="exportDest"]').forEach(r => r.addEventListener('change', () => {
-  document.getElementById('exportPhotosRow').style.display = document.querySelector('input[name="exportDest"]:checked').value === 'other' ? '' : 'none';
+  const isOther = document.querySelector('input[name="exportDest"]:checked').value === 'other';
+  const photosRow = document.getElementById('exportPhotosRow');
+  photosRow.style.opacity = isOther ? '' : '0.4';
+  photosRow.querySelector('input').disabled = !isOther;
+  if (_exportMultiCol) document.getElementById('exportCollectionPicker').style.display = isOther ? '' : 'none';
 }));
 function escapeHtml(s) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -2363,6 +2367,7 @@ async function openFolder() {
 }
 
 let _pendingSaveAsCollection = false;
+let _exportMultiCol = false;
 
 async function openFolderWithHandle(handle) {
   _pendingDirHandle = handle;
@@ -4343,8 +4348,11 @@ async function openExportModal() {
   if (!dirHandle) return;
   document.getElementById('exportFolderName').textContent = currentCollection?.name || dirHandle.name;
   document.getElementById('exportTitle').value = currentCollection?.name || dirHandle.name;
-  document.querySelector('input[name="exportDest"][value="current"]').checked = true;
-  document.getElementById('exportPhotosRow').style.display = 'none';
+  document.querySelector('input[name="exportDest"][value="other"]').checked = true;
+  const photosRow = document.getElementById('exportPhotosRow');
+  photosRow.style.display = '';
+  photosRow.style.opacity = '';
+  photosRow.querySelector('input').disabled = false;
   document.getElementById('exportPhotosCheck').checked = true;
 
   // Populate collection picker
@@ -4352,10 +4360,10 @@ async function openExportModal() {
   let allCols;
   try { allCols = await dbGetAll(); } catch { allCols = []; }
 
-  if (allCols.length <= 1) {
-    // Only one or zero collections — hide picker, just export current
-    document.getElementById('exportCollectionPicker').style.display = 'none';
-  } else {
+  _exportMultiCol = false;
+  document.getElementById('exportCollectionPicker').style.display = 'none';
+  if (allCols.length > 1) {
+    _exportMultiCol = true;
     document.getElementById('exportCollectionPicker').style.display = '';
     list.innerHTML = '';
     for (const col of allCols) {
