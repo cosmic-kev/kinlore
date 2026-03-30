@@ -2760,8 +2760,10 @@ async function selectPhoto(photo) {
   const previewPane = document.getElementById('fullPreviewPane');
   previewPane.classList.add('visible');
   document.getElementById('fullPreviewFilename').textContent = photo.name;
-  document.getElementById('gridSection').classList.remove('full');
-  document.getElementById('gridSection').classList.add('strip');
+  const gridSection = document.getElementById('gridSection');
+  gridSection._savedScrollTop = gridSection.scrollTop;
+  gridSection.classList.remove('full');
+  gridSection.classList.add('strip');
 
   // Populate editor fields right away (no waiting on image)
   const pd = parsePartialDate(meta.date || '');
@@ -2892,8 +2894,10 @@ function closePreview() {
   }
   // Return to full grid view
   document.getElementById('fullPreviewPane').classList.remove('visible');
-  document.getElementById('gridSection').classList.remove('strip');
-  document.getElementById('gridSection').classList.add('full');
+  const gs = document.getElementById('gridSection');
+  gs.classList.remove('strip');
+  gs.classList.add('full');
+  requestAnimationFrame(() => { gs.scrollTop = gs._savedScrollTop || 0; });
   document.querySelectorAll('.photo-card').forEach(c => c.classList.remove('selected'));
   document.getElementById('editorPlaceholder').style.display = '';
   document.getElementById('editorContent').style.display = 'none';
@@ -4642,7 +4646,7 @@ if (isMultiCollection) {
   .card:hover img { filter: sepia(8%) contrast(1.07) brightness(1.0); }`;
   html = html.replace('</style>', lightBodyCSS + '\n</style>');
 
-  // Image fade-in JS: event delegation for async loads + immediate check for cached images
+  // Image fade-in JS
   const perfJS = `
 // \u2500\u2500 Image fade-in \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 document.getElementById('grid').addEventListener('load', e => {
