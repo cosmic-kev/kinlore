@@ -4632,11 +4632,31 @@ if (isMultiCollection) {
     html = html.replace('// \u2500\u2500 Init \u2500\u2500', pickerJS + '\n// \u2500\u2500 Init \u2500\u2500');
   }
 
-  // Light body / footer overrides (dark hero + controls bar retained via explicit backgrounds)
+  // Light body / footer overrides + scroll/load performance improvements
   const lightBodyCSS = `
   body { background: var(--paper); color: var(--ink); }
-  footer { background: var(--paper-dark); color: var(--ink-light); border-top: 1px solid rgba(201,168,108,0.3); }`;
+  footer { background: var(--paper-dark); color: var(--ink-light); border-top: 1px solid rgba(201,168,108,0.3); }
+  .card { contain: layout style; content-visibility: auto; contain-intrinsic-size: 0 360px; }
+  .card img { filter: none; opacity: 0; transition: opacity 0.35s ease; }
+  .card img.loaded { opacity: 1; }
+  .card:hover img { filter: sepia(8%) contrast(1.07) brightness(1.0); }`;
   html = html.replace('</style>', lightBodyCSS + '\n</style>');
+
+  // Image fade-in JS: event delegation for async loads + immediate check for cached images
+  const perfJS = `
+// \u2500\u2500 Image fade-in \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+document.getElementById('grid').addEventListener('load', e => {
+  if (e.target.tagName === 'IMG') e.target.classList.add('loaded');
+}, true);
+const _renderGrid = renderGrid;
+renderGrid = function() {
+  _renderGrid();
+  document.querySelectorAll('#grid .card img').forEach(img => {
+    if (img.complete && img.naturalWidth > 0) img.classList.add('loaded');
+  });
+};
+`;
+  html = html.replace('// \u2500\u2500 Init \u2500\u2500', perfJS + '\n// \u2500\u2500 Init \u2500\u2500');
 
   return html.replace(/\\`/g, '`').replace(/\\\${/g, '${');
 }
