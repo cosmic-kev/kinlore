@@ -2779,7 +2779,10 @@ async function selectPhoto(photo) {
   document.querySelectorAll('.photo-card').forEach(c => {
     const isSelected = c.dataset.name === photo.name;
     c.classList.toggle('selected', isSelected);
-    if (isSelected) c.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    if (isSelected) {
+      const strip = document.getElementById('gridSection');
+      strip.scrollLeft = c.offsetLeft - (strip.clientWidth / 2) + (c.offsetWidth / 2);
+    }
   });
   hideSuggestions();
   document.getElementById('editorPanel').scrollTop = 0;
