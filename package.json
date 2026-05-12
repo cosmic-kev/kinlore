@@ -1,0 +1,42 @@
+{
+  "name": "kinlore",
+  "version": "0.1.0",
+  "description": "Family photo tagging tool — desktop app",
+  "main": "main.js",
+  "author": "cosmic-kev",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cosmic-kev/kinlore.git"
+  },
+  "scripts": {
+    "start": "node launch.js",
+    "build": "node build.js"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.cosmickev.kinlore",
+    "productName": "Kinlore",
+    "files": [
+      "kinlore.html",
+      "main.js"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Kinlore"
+    }
+  }
+}
