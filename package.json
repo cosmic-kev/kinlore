@@ -22,12 +22,20 @@
     "productName": "Kinlore",
     "files": [
       "kinlore.html",
-      "main.js"
+      "main.js",
+      "preload.js"
     ],
     "directories": {
       "output": "dist",
       "buildResources": "build"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "cosmic-kev",
+        "repo": "kinlore"
+      }
+    ],
     "win": {
       "target": "nsis"
     },
@@ -38,5 +46,8 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Kinlore"
     }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.3"
   }
 }
