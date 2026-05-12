@@ -33,7 +33,8 @@
       {
         "provider": "github",
         "owner": "cosmic-kev",
-        "repo": "kinlore"
+        "repo": "kinlore",
+        "releaseType": "release"
       }
     ],
     "win": {
