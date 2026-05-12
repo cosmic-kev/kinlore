@@ -174,3 +174,32 @@ Tag data is stored as a plain JSON file in the `_kinlore/` subfolder of each col
 ```
 
 Dates are always partial-date friendly — `"1985"`, `"1985-06"`, or `"1985-06-15"` are all valid.
+
+---
+
+## For developers
+
+### Run the app locally
+```
+npm install
+npm start
+```
+
+### Release a new version
+A GitHub Actions workflow builds the Windows installer and publishes it to GitHub Releases whenever you push a version tag.
+
+```
+npm version patch        # 0.1.0 → 0.1.1 (bug fixes)
+npm version minor        # 0.1.0 → 0.2.0 (new features)
+npm version major        # 0.1.0 → 1.0.0 (breaking changes)
+
+git push && git push --tags
+```
+
+After ~3 minutes, a new release appears at github.com/cosmic-kev/kinlore/releases with the installer attached. Edit the release notes from the GitHub UI before announcing.
+
+### Build the installer locally (optional)
+```
+npm run build
+```
+Produces `dist/Kinlore Setup x.y.z.exe`. First run on a given Windows machine needs Administrator or Developer Mode enabled (for symlink extraction in electron-builder's cache); subsequent builds work without elevation.
