@@ -22,7 +22,7 @@ ipcMain.handle('updater:check', async () => {
   return autoUpdater.checkForUpdates();
 });
 ipcMain.handle('updater:download', () => autoUpdater.downloadUpdate());
-ipcMain.handle('updater:install', () => autoUpdater.quitAndInstall());
+ipcMain.handle('updater:install', () => autoUpdater.quitAndInstall(true, true));
 
 function createWindow() {
   mainWindow = new BrowserWindow({
