@@ -2259,6 +2259,7 @@ if (window.kinlore?.isElectron) {
     if (event === 'available') {
       _latestUpdateInfo = data;
       setUpdateState('available', data);
+      document.getElementById('aboutBtn').classList.add('has-update');
     } else if (event === 'not-available') {
       window.kinlore.getVersion().then(v => setUpdateState('up-to-date', { current: v }));
     } else if (event === 'progress') {
@@ -2271,23 +2272,20 @@ if (window.kinlore?.isElectron) {
       setUpdateState('error', data);
     }
   });
-  // Silent on-launch flow: check → auto-download if available → toast when ready
+  // Silent on-launch flow: check only. Notify via toast + About-button dot.
+  // Download requires explicit user approval via the About modal.
   setTimeout(async () => {
-    let triggeredSilentDownload = false;
+    let notifiedAvailable = false;
     const silentHandler = (event, data) => {
-      if (event === 'available' && !triggeredSilentDownload) {
-        triggeredSilentDownload = true;
-        window.kinlore.updater.download();
-      } else if (event === 'downloaded' && triggeredSilentDownload) {
-        showToast(`Update v${data.version} ready — click About to install`, 'info', 8000);
+      if (event === 'available' && !notifiedAvailable) {
+        notifiedAvailable = true;
+        showToast(`Update v${data.version} available — click About to download`, 'info', 8000);
+        document.getElementById('aboutBtn').classList.add('has-update');
       }
     };
     window.kinlore.updater.on(silentHandler);
     try {
-      const result = await window.kinlore.updater.check();
-      if (result && result.status === 'dev-mode') {
-        // no-op in dev
-      }
+      await window.kinlore.updater.check();
     } catch (e) {
       // swallow silently
     }
