@@ -1079,6 +1079,12 @@
     letter-spacing: 0.01em;
   }
   #exportBar span { color: var(--sepia); }
+  #exportBar .exportBar-actions { display: flex; gap: 8px; align-items: center; }
+  #exportBar .btn {
+    font-size: 0.72rem;
+    padding: 5px 12px;
+    letter-spacing: 0.01em;
+  }
 
   .grid-stat { font-size: 0.78rem; color: var(--faded); margin-left: auto; }
 
@@ -1430,7 +1436,6 @@
     <button class="btn btn-ghost" id="openFolderBtn" style="display:none;">Open Folder</button>
     <button class="btn btn-ghost" id="exportViewerBtn" disabled>Export</button>
     <button class="btn btn-ghost" id="scanModeBtn" disabled title="Watch folder for new scans">Scan Mode</button>
-    <button class="btn btn-ghost" id="aboutBtn" style="display:none;">About</button>
   </div>
 </header>
 
@@ -1782,10 +1787,15 @@
     </div>
   </div>
 
-  <!-- Export bar -->
-  <div id="exportBar">
-    <span id="exportStat">0 photos tagged</span>
-    <button class="btn btn-ghost" id="viewLogsBtn" disabled>Activity Log</button>
+
+</div>
+
+<!-- Bottom toolbar (always visible: home + collection) -->
+<div id="exportBar">
+  <span id="exportStat"></span>
+  <div class="exportBar-actions">
+    <button class="btn btn-ghost" id="viewLogsBtn">Activity Log</button>
+    <button class="btn btn-ghost" id="aboutBtn" style="display:none;">About</button>
   </div>
 </div>
 
@@ -1982,7 +1992,6 @@ function resetAppState() {
   document.getElementById('exportViewerBtn').disabled = true;
   document.getElementById('selectModeBtn').disabled = true;
   document.getElementById('scanModeBtn').disabled = true;
-  document.getElementById('viewLogsBtn').disabled = true;
   document.querySelectorAll('.photo-card').forEach(c => c.classList.remove('selected'));
 
   // Reset filter pills
@@ -2173,6 +2182,7 @@ function showHome() {
   document.getElementById('landing').style.display = '';
   document.getElementById('homeBtn').style.display = 'none';
   document.getElementById('openFolderBtn').style.display = 'none';
+  document.getElementById('exportStat').textContent = '';
   setStatus('No folder open. Select a collection to begin.');
   renderCollectionGrid();
 }
@@ -2367,7 +2377,7 @@ document.getElementById('viewLogsBtn').addEventListener('click', async () => {
         return escapeHtml(line);
       }).join('\n');
     } else {
-      logEl.textContent = '(No log file — open a folder first)';
+      logEl.textContent = '(Activity logs are per-collection — open a collection to view its log.)';
     }
   } catch (e) {
     logEl.textContent = 'Could not read log: ' + e.message;
@@ -2798,7 +2808,6 @@ async function loadFolder() {
   }
   appendLog('INFO', `Opened folder: ${dirHandle.name} (${nPhotos} photos, ${nVideos} videos, ${Object.keys(metadata).length} tagged)`);
   document.getElementById('exportViewerBtn').disabled = false;
-  document.getElementById('viewLogsBtn').disabled = false;
   document.getElementById('selectModeBtn').disabled = false;
   document.getElementById('scanModeBtn').disabled = false;
 }
