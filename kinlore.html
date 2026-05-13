@@ -2318,8 +2318,12 @@ if (window.kinlore?.isElectron) {
     const silentHandler = (event, data) => {
       if (event === 'available' && !notifiedAvailable) {
         notifiedAvailable = true;
-        showToast(`Update v${data.version} available — click About to download`, 'info', 8000);
         document.getElementById('aboutBtn').classList.add('has-update');
+        // Skip the toast if the user is already in the About modal — they can see the state there.
+        const aboutOpen = document.getElementById('aboutModal').style.display === 'flex';
+        if (!aboutOpen) {
+          showToast(`Update v${data.version} available — click About to download`, 'info', 8000);
+        }
       }
     };
     window.kinlore.updater.on(silentHandler);
