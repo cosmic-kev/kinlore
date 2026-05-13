@@ -1,7 +1,7 @@
 {
   "name": "kinlore",
   "version": "0.2.9",
-  "description": "Family photo tagging tool — desktop app",
+  "description": "Kinlore",
   "main": "main.js",
   "author": "cosmic-kev",
   "license": "MIT",
