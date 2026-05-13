@@ -1079,6 +1079,7 @@
     letter-spacing: 0.01em;
   }
   #exportBar span { color: var(--sepia); }
+  #exportBar .es-name { color: var(--paper); font-weight: 600; letter-spacing: 0.005em; margin-right: 4px; }
   #exportBar .exportBar-actions { display: flex; gap: 8px; align-items: center; }
   #exportBar .btn {
     font-size: 0.72rem;
@@ -1433,7 +1434,6 @@
   </h1>
   <div class="header-actions">
     <button class="btn btn-ghost" id="homeBtn" style="display:none;" title="Back to collections">Home</button>
-    <button class="btn btn-ghost" id="openFolderBtn" style="display:none;">Open Folder</button>
     <button class="btn btn-ghost" id="exportViewerBtn" disabled>Export</button>
     <button class="btn btn-ghost" id="scanModeBtn" disabled title="Watch folder for new scans">Scan Mode</button>
   </div>
@@ -1445,7 +1445,7 @@
 <!-- Status bar -->
 <div id="statusBar">
   <div class="dot"></div>
-  <span id="statusText">No folder open. Click "Open Folder" to begin.</span>
+  <span id="statusText">No folder open. Select a collection or create a new one to begin.</span>
   <div id="loadProgressBar"></div>
 </div>
 
@@ -1456,7 +1456,6 @@
   <p>Tag people, add dates, and build a searchable archive from your scanned photos.</p>
   <div class="landing-actions">
     <button class="btn btn-accent" style="font-size:0.95rem;padding:10px 28px;" id="newCollectionBtn">New Collection</button>
-    <button class="btn btn-secondary" style="font-size:0.95rem;padding:10px 28px;" id="landingOpenBtn">Open Folder</button>
   </div>
   <div class="collection-grid" id="collectionGrid">
     <div id="emptyCollections">No collections yet. Create one to get started.</div>
@@ -2113,6 +2112,7 @@ document.getElementById('renameSaveBtn').addEventListener('click', async () => {
   await dbUpdate(_renameTargetId, { name: newName });
   if (currentCollection && currentCollection.id === _renameTargetId) {
     currentCollection = await dbGet(_renameTargetId);
+    updateExportStat();
   }
   document.getElementById('renameCollectionModal').style.display = 'none';
   _renameTargetId = null;
@@ -2181,7 +2181,6 @@ function showHome() {
   document.getElementById('app').classList.remove('visible');
   document.getElementById('landing').style.display = '';
   document.getElementById('homeBtn').style.display = 'none';
-  document.getElementById('openFolderBtn').style.display = 'none';
   document.getElementById('exportStat').textContent = '';
   setStatus('No folder open. Select a collection to begin.');
   renderCollectionGrid();
@@ -2193,11 +2192,7 @@ function showApp() {
   app.style.display = '';
   app.classList.add('visible');
   document.getElementById('homeBtn').style.display = '';
-  document.getElementById('openFolderBtn').style.display = '';
 }
-
-// "Open Folder" (quick open — not a saved collection)
-document.getElementById('landingOpenBtn').addEventListener('click', openFolder);
 
 // Init: render collection grid on page load
 renderCollectionGrid();
@@ -2348,7 +2343,6 @@ if (window.kinlore?.isElectron) {
 // ─────────────────────────────────────────────────────────────────
 // INIT
 // ─────────────────────────────────────────────────────────────────
-document.getElementById('openFolderBtn').addEventListener('click', openFolder);
 document.getElementById('exportViewerBtn').addEventListener('click', openExportModal);
 document.getElementById('exportCancelBtn').addEventListener('click', () => document.getElementById('exportModal').classList.remove('open'));
 document.getElementById('exportRunBtn').addEventListener('click', runExport);
@@ -2607,34 +2601,11 @@ document.getElementById('modalOpenBtn').addEventListener('click', async () => {
 
   document.getElementById('folderModal').classList.remove('open');
 
-  // If opened via "Open Folder" (not a saved collection), auto-save as collection
-  if (_pendingSaveAsCollection) {
-    _pendingSaveAsCollection = false;
-    const name = dirHandle.name;
-    const id = await dbAdd({ name, directoryHandle: dirHandle, createdAt: new Date().toISOString() });
-    currentCollection = await dbGet(id);
-  }
-
   await loadFolder();
   btn.disabled = false;
   btn.textContent = 'Open Photos';
 });
 
-async function openFolder() {
-  try {
-    _pendingDirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-  } catch (e) {
-    if (e.name !== 'AbortError') { setStatus('Could not open folder: ' + e.message); appendLog('ERROR', 'Could not open folder: ' + e.message); }
-    return;
-  }
-  // If opened from landing (no collection), offer to save as collection
-  if (!currentCollection) {
-    _pendingSaveAsCollection = true;
-  }
-  await openFolderWithHandle(_pendingDirHandle);
-}
-
-let _pendingSaveAsCollection = false;
 let _exportMultiCol = false;
 
 async function openFolderWithHandle(handle) {
@@ -4562,8 +4533,12 @@ function rebuildPeopleList() {
 }
 
 function updateExportStat() {
+  const el = document.getElementById('exportStat');
+  if (!currentCollection && !dirHandle) { el.textContent = ''; return; }
+  const name = currentCollection?.name || dirHandle?.name || '';
   const tagged = Object.values(metadata).filter(m => m.people?.length || m.date || m.caption).length;
-  document.getElementById('exportStat').innerHTML = `<span>${tagged}</span> of ${photos.length} photos tagged`;
+  const total = photos?.length || 0;
+  el.innerHTML = `<strong class="es-name">${escapeHtml(name)}</strong> · <span>${tagged}</span> of ${total} photos tagged`;
 }
 
 function parsePartialDate(d) {
