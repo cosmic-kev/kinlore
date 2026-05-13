@@ -32,6 +32,7 @@ function createWindow() {
     minHeight: 700,
     title: 'Kinlore',
     backgroundColor: '#f4ead5',
+    icon: path.join(__dirname, 'assets', 'kinlore.ico'),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

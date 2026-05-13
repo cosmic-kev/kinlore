@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Kinlore</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><g stroke='%231a1611' stroke-width='11' stroke-linecap='round' fill='none'><line x1='50' y1='22' x2='22' y2='72'/><line x1='50' y1='22' x2='78' y2='72'/></g><circle cx='50' cy='22' r='12' fill='%231a1611'/><circle cx='22' cy='72' r='12' fill='%231a1611'/><circle cx='78' cy='72' r='12' fill='%231a1611'/></svg>" />
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
@@ -49,13 +50,15 @@
     flex-shrink: 0;
   }
   header h1 {
-    font-family: var(--display-font);
-    font-size: 1.3rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    line-height: 1;
   }
-  header h1 span { color: var(--sepia); }
+  header h1 svg {
+    height: 28px;
+    width: auto;
+    display: block;
+  }
 
   .header-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 
@@ -1197,6 +1200,16 @@
     margin-bottom: 6px;
     color: var(--ink);
   }
+  .about-lockup {
+    display: flex;
+    justify-content: center;
+    margin: 4px 0 14px;
+  }
+  .about-lockup svg {
+    height: 96px;
+    width: auto;
+    display: block;
+  }
   .modal-folder-name {
     font-size: 0.8rem;
     color: var(--faded);
@@ -1398,7 +1411,20 @@
 
 <!-- Header -->
 <header>
-  <h1>Kin<span>lore</span></h1>
+  <h1>
+    <svg viewBox="0 0 296 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Kinlore">
+      <g transform="scale(0.64)">
+        <g stroke="#f4ead5" stroke-width="4.8" stroke-linecap="round" fill="none">
+          <line x1="50" y1="22" x2="22" y2="72"/>
+          <line x1="50" y1="22" x2="78" y2="72"/>
+        </g>
+        <circle cx="50" cy="22" r="7.5" fill="#f4ead5"/>
+        <circle cx="22" cy="72" r="7.5" fill="#f4ead5"/>
+        <circle cx="78" cy="72" r="7.5" fill="#f4ead5"/>
+      </g>
+      <text x="84" y="50" font-family="Inter, system-ui, sans-serif" font-weight="600" font-size="56" letter-spacing="-1.96" fill="#f4ead5">Kinlore</text>
+    </svg>
+  </h1>
   <div class="header-actions">
     <button class="btn btn-ghost" id="homeBtn" style="display:none;" title="Back to collections">Home</button>
     <button class="btn btn-ghost" id="openFolderBtn" style="display:none;">Open Folder</button>
@@ -1546,8 +1572,21 @@
 <div id="aboutModal" class="modal-overlay" style="display:none;">
   <div class="modal-box">
     <button class="modal-close-x" id="aboutCloseX" aria-label="Close">&times;</button>
-    <h3>About Kinlore</h3>
-    <p class="modal-folder-name">Version <span id="aboutVersion">&mdash;</span></p>
+    <div class="about-lockup">
+      <svg viewBox="0 0 200 180" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Kinlore">
+        <g transform="translate(40,0) scale(1.2)">
+          <g stroke="#1a1611" stroke-width="4.8" stroke-linecap="round" fill="none">
+            <line x1="50" y1="22" x2="22" y2="72"/>
+            <line x1="50" y1="22" x2="78" y2="72"/>
+          </g>
+          <circle cx="50" cy="22" r="7.5" fill="#1a1611"/>
+          <circle cx="22" cy="72" r="7.5" fill="#1a1611"/>
+          <circle cx="78" cy="72" r="7.5" fill="#1a1611"/>
+        </g>
+        <text x="100" y="170" font-family="Inter, system-ui, sans-serif" font-weight="600" font-size="40" letter-spacing="-1.4" fill="#1a1611" text-anchor="middle">Kinlore</text>
+      </svg>
+    </div>
+    <p class="modal-folder-name" style="text-align:center;">Version <span id="aboutVersion">&mdash;</span></p>
     <p id="updateStatus" class="update-status"></p>
     <div id="updateProgress" style="display:none; margin-top:8px;">
       <div class="progress-track"><div class="progress-fill" id="updateProgressFill"></div></div>

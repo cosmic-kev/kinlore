@@ -23,7 +23,8 @@
     "files": [
       "kinlore.html",
       "main.js",
-      "preload.js"
+      "preload.js",
+      "assets/kinlore.ico"
     ],
     "directories": {
       "output": "dist",
@@ -38,14 +39,17 @@
       }
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "assets/kinlore.ico"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Kinlore"
+      "shortcutName": "Kinlore",
+      "installerIcon": "assets/kinlore.ico",
+      "uninstallerIcon": "assets/kinlore.ico"
     }
   },
   "dependencies": {
