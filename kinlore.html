@@ -1452,7 +1452,7 @@
     <label class="modal-label" style="margin-top:12px;">New Name</label>
     <input type="text" class="modal-input" id="renameCollectionInput" placeholder="Collection name" autocomplete="off" />
     <div class="modal-actions" style="margin-top:18px;">
-      <button class="btn btn-secondary" id="renameCancelBtn">Cancel</button>
+      <button class="btn btn-secondary" id="renameCollectionCancelBtn">Cancel</button>
       <button class="btn btn-accent" id="renameSaveBtn">Save</button>
     </div>
   </div>
@@ -2055,7 +2055,7 @@ document.getElementById('newCollectionModal').addEventListener('click', e => {
 document.getElementById('renameCollectionModal').addEventListener('click', e => {
   if (e.target === e.currentTarget) { e.currentTarget.style.display = 'none'; _renameTargetId = null; }
 });
-document.getElementById('renameCancelBtn').addEventListener('click', () => {
+document.getElementById('renameCollectionCancelBtn').addEventListener('click', () => {
   document.getElementById('renameCollectionModal').style.display = 'none';
   _renameTargetId = null;
 });
@@ -2072,7 +2072,7 @@ document.getElementById('renameSaveBtn').addEventListener('click', async () => {
 });
 document.getElementById('renameCollectionInput').addEventListener('keydown', e => {
   if (e.key === 'Enter') document.getElementById('renameSaveBtn').click();
-  if (e.key === 'Escape') document.getElementById('renameCancelBtn').click();
+  if (e.key === 'Escape') document.getElementById('renameCollectionCancelBtn').click();
 });
 
 document.getElementById('relocatePickBtn').addEventListener('click', async () => {
